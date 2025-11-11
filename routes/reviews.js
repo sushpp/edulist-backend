@@ -1,28 +1,21 @@
 const express = require('express');
+const router = express.Router();
 const {
   createReview,
   getInstituteReviews,
-  getUserReviews,
+  getAllReviews,
+  moderateReview,
   updateReview,
   deleteReview
-} = require('../controllers/reviewController');
+} = require('../controllers/reviewController'); // make sure the path is correct
 const { auth } = require('../middleware/auth');
 
-const router = express.Router();
-
-// Create a new review
+// Routes
 router.post('/', auth, createReview);
-
-// Get all reviews for a specific institute (public)
 router.get('/institute/:instituteId', getInstituteReviews);
-
-// Get all reviews created by the logged-in user
-router.get('/user', auth, getUserReviews);
-
-// Update a review by ID
+router.get('/all', auth, getAllReviews); // admin route
+router.put('/moderate/:id', auth, moderateReview); // admin route
 router.put('/:id', auth, updateReview);
-
-// Delete a review by ID
 router.delete('/:id', auth, deleteReview);
 
 module.exports = router;

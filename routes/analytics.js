@@ -1,32 +1,30 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth'); // <- correct if auth.js exports multiple
 const User = require('../models/User');
 const Institute = require('../models/Institute');
 const Review = require('../models/Review');
 const Enquiry = require('../models/Enquiry');
 
-// Get homepage statistics
+// Get homepage statistics (public)
 router.get('/homepage', async (req, res) => {
   try {
     const [
       totalInstitutes,
       totalReviews,
       totalUsers,
-      approvedInstitutes,
       cities
     ] = await Promise.all([
       Institute.countDocuments({ status: 'approved' }),
       Review.countDocuments(),
       User.countDocuments({ role: 'user' }),
-      Institute.find({ status: 'approved' }),
       Institute.distinct('city', { status: 'approved' })
     ]);
 
-    // Get featured institutes (top rated)
+    // Get featured institutes
     const featuredInstitutes = await Institute.find({ status: 'approved' })
       .limit(6)
-      .sort({ createdAt: -1 }); // Or implement rating-based sorting
+      .sort({ createdAt: -1 });
 
     res.json({
       stats: {
@@ -38,15 +36,15 @@ router.get('/homepage', async (req, res) => {
       featuredInstitutes
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 // Get platform analytics (admin only)
 router.get('/dashboard', auth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
 
     const [
       totalUsers,
@@ -90,7 +88,6 @@ router.get('/user/:userId', auth, async (req, res) => {
       Enquiry.countDocuments({ user: userId })
     ]);
 
-    // Get unique institutes viewed (from reviews and enquiries)
     const reviewedInstitutes = await Review.distinct('institute', { user: userId });
     const enquiredInstitutes = await Enquiry.distinct('institute', { user: userId });
     const uniqueInstitutes = new Set([...reviewedInstitutes, ...enquiredInstitutes]).size;
