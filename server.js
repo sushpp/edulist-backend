@@ -12,11 +12,13 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'edulist-frontend-aud9.vercel.app',
-    process.env.FRONTEND_URL
+    'https://edulist-frontend-aud9.vercel.app',
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_DEPLOY_URL
   ].filter(Boolean),
   credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -24,19 +26,19 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // =======================
 // ✅ Database Connection
 // =======================
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/edulist';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 const connectDB = async () => {
   try {
-    if (!process.env.MONGODB_URI && !MONGODB_URI.includes('localhost')) {
-      throw new Error('MONGODB_URI not defined in environment variables.');
+    if (!MONGODB_URI) {
+      throw new Error('❌ MONGODB_URI is not defined in .env');
     }
-    
+
     const conn = await mongoose.connect(MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    
+
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     console.log(`📊 Database: ${conn.connection.name}`);
   } catch (error) {

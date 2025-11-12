@@ -1,5 +1,5 @@
 const express = require('express');
-const { auth, instituteAuth } = require('../middleware/auth');
+const { auth, adminAuth, instituteAuth } = require('../middleware/auth');
 const Institute = require('../models/Institute');
 const User = require('../models/User');
 
@@ -51,12 +51,8 @@ router.get('/:id', async (req, res) => {
 =========================== */
 
 // Get all pending institutes (admin only)
-router.get('/admin/pending', auth, async (req, res) => {
+router.get('/admin/pending', auth, adminAuth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
     const institutes = await Institute.find({ status: 'pending' })
       .populate('user', 'name email phone createdAt');
 
@@ -68,12 +64,8 @@ router.get('/admin/pending', auth, async (req, res) => {
 });
 
 // Update institute status (admin only)
-router.put('/admin/:id/status', auth, async (req, res) => {
+router.put('/admin/:id/status', auth, adminAuth, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
     const { status } = req.body;
     const institute = await Institute.findByIdAndUpdate(
       req.params.id,
@@ -95,7 +87,7 @@ router.put('/admin/:id/status', auth, async (req, res) => {
 // Get institute profile (logged-in institute)
 router.get('/profile', auth, instituteAuth, async (req, res) => {
   try {
-    const institute = await Institute.findOne({ user: req.user.id })
+    const institute = await Institute.findOne({ user: req.user._id })
       .populate('user', 'name email phone');
     if (!institute) {
       return res.status(404).json({ message: 'Institute not found' });
@@ -110,7 +102,7 @@ router.get('/profile', auth, instituteAuth, async (req, res) => {
 // Update institute profile
 router.put('/profile', auth, instituteAuth, async (req, res) => {
   try {
-    const institute = await Institute.findOne({ user: req.user.id });
+    const institute = await Institute.findOne({ user: req.user._id });
     if (!institute) {
       return res.status(404).json({ message: 'Institute not found' });
     }
@@ -121,7 +113,7 @@ router.put('/profile', auth, instituteAuth, async (req, res) => {
       { new: true }
     );
 
-    res.json({ success: true, message: 'Profile updated successfully', updatedInstitute });
+    res.json({ success: true, message: 'Profsile updated successfully', updatedInstitute });
   } catch (error) {
     console.error('Error updating institute:', error);
     res.status(500).json({ message: 'Server error' });
