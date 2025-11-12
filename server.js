@@ -7,17 +7,17 @@ require('dotenv').config();
 const app = express();
 
 // =======================
-// ✅ Middleware Configuration (PERMANENT FIX)
+// ✅ Middleware Configuration
 // =======================
-// We build the list of allowed origins dynamically.
-// This is much more robust than hardcoding URLs.
-const allowedOrigins = [
-  'http://localhost:3000', // Always allow for local development
-  process.env.FRONTEND_URL, // The production URL from Render's environment variables
-];
-
 app.use(cors({
-  origin: allowedOrigins.filter(Boolean), // Filter out any undefined values
+  origin: [
+    'http://localhost:3000',
+    // === THIS IS THE LINE THAT WAS FIXED ===
+    'https://edulist-frontend-aud9.vercel.app',
+    // =====================================
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_DEPLOY_URL
+  ].filter(Boolean),
   credentials: true
 }));
 
