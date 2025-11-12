@@ -12,7 +12,9 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://edulist-frontend-aud9.vercel.app',
+    // === THIS IS THE LINE THAT WAS FIXED ===
+    'https://edulist-frontend-aud9-jyl2ws7y4-sushmitas-projects-64249a1d.vercel.app',
+    // =====================================
     process.env.FRONTEND_URL,
     process.env.FRONTEND_DEPLOY_URL
   ].filter(Boolean),
