@@ -12,7 +12,10 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    // === ADDED BOTH OF YOUR URLS ===
     'https://edulist-frontend-aud9-6yemo7esi-sushmitas-projects-64249a1d.vercel.app',
+    'https://edulist-frontend-aud9.vercel.app',
+    // ===================================
     process.env.FRONTEND_URL,
     process.env.FRONTEND_DEPLOY_URL
   ].filter(Boolean),
@@ -103,8 +106,13 @@ app.get('/', (req, res) => {
 // ✅ Production Setup
 // =======================
 if (process.env.NODE_ENV === 'production') {
+  // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  
+  // Serve frontend build
   app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Handle SPA routing
   app.get('*', (req, res) => {
     res.sendFile(path.resolve(__dirname, '../frontend/build', 'index.html'));
   });
@@ -116,6 +124,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use((err, req, res, next) => {
   console.error('🔴 Error Stack:', err.stack);
   
+  // Mongoose validation error
   if (err.name === 'ValidationError') {
     const messages = Object.values(err.errors).map(val => val.message);
     return res.status(400).json({
@@ -124,6 +133,7 @@ app.use((err, req, res, next) => {
     });
   }
   
+  // Mongoose duplicate key error
   if (err.code === 11000) {
     const field = Object.keys(err.keyValue)[0];
     return res.status(400).json({
@@ -132,6 +142,7 @@ app.use((err, req, res, next) => {
     });
   }
   
+  // JWT errors
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       message: 'Invalid token'
@@ -144,6 +155,7 @@ app.use((err, req, res, next) => {
     });
   }
   
+  // Default error
   res.status(err.status || 500).json({
     message: err.message || 'Something went wrong!',
     error: process.env.NODE_ENV === 'production' ? {} : err.stack
