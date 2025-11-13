@@ -1,9 +1,35 @@
 const express = require('express');
 const { auth, instituteAuth } = require('../middleware/auth');
-const Course = require('../models/Course'); // Assuming you have a Course model
+const Course = require('../models/Course');
 const Institute = require('../models/Institute');
+const multer = require('multer');
+const path = require('path');
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 // ===========================
 // 🔹 PUBLIC ROUTES
@@ -24,69 +50,191 @@ router.get('/institute/:instituteId', async (req, res) => {
 // 🔹 INSTITUTE AUTH ROUTES
 // ===========================
 
-// 🔥 IMPORTANT: This is the route your frontend calls for the dashboard
 // Get all courses for the logged-in institute
 router.get('/my', auth, instituteAuth, async (req, res) => {
   try {
-    // Find the institute document associated with the logged-in user
     const institute = await Institute.findOne({ user: req.user._id });
     if (!institute) {
       return res.status(404).json({ message: 'Institute profile not found', courses: [] });
     }
 
-    // Find all courses that belong to this institute
     const courses = await Course.find({ institute: institute._id });
-    res.json({ success: true, courses });
+    
+    // Add image URLs
+    const coursesWithUrls = courses.map(course => ({
+      ...course.toObject(),
+      imageUrl: course.image ? `${req.protocol}://${req.get('host')}/uploads/${course.image.filename}` : null
+    }));
+
+    res.json({ success: true, courses: coursesWithUrls });
   } catch (error) {
     console.error('Error fetching my courses:', error);
     res.status(500).json({ message: 'Server error', courses: [] });
   }
 });
 
-// Create a new course
-router.post('/', auth, instituteAuth, async (req, res) => {
+// Create a new course (WITH FILE UPLOAD)
+router.post('/', auth, instituteAuth, upload.single('image'), async (req, res) => {
   try {
+    console.log('🔍 Course creation request body:', req.body);
+    console.log('🔍 Uploaded file:', req.file);
+
     const institute = await Institute.findOne({ user: req.user._id });
     if (!institute) {
       return res.status(404).json({ message: 'Institute profile not found' });
     }
 
-    const newCourse = new Course({
-      ...req.body,
-      institute: institute._id, // Associate the course with the institute
+    // Parse facilities and syllabus from JSON strings
+    let facilities = [];
+    let syllabus = [];
+    
+    try {
+      facilities = req.body.facilities ? JSON.parse(req.body.facilities) : [];
+      syllabus = req.body.syllabus ? JSON.parse(req.body.syllabus) : [];
+    } catch (parseError) {
+      console.warn('Failed to parse facilities/syllabus, using empty arrays');
+    }
+
+    // Validate required fields
+    const requiredFields = ['title', 'description', 'duration', 'fees', 'category'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({ 
+        message: `Missing required fields: ${missingFields.join(', ')}` 
+      });
+    }
+
+    const courseData = {
+      institute: institute._id,
+      title: req.body.title,
+      description: req.body.description,
+      duration: req.body.duration,
+      fees: Number(req.body.fees),
+      category: req.body.category,
+      facilities: facilities,
+      syllabus: syllabus,
+      eligibility: req.body.eligibility || ''
+    };
+
+    // Add image data if uploaded
+    if (req.file) {
+      courseData.image = {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        path: req.file.path
+      };
+    }
+
+    const newCourse = new Course(courseData);
+    const savedCourse = await newCourse.save();
+
+    // Add image URL for response
+    const responseCourse = {
+      ...savedCourse.toObject(),
+      imageUrl: savedCourse.image ? `${req.protocol}://${req.get('host')}/uploads/${savedCourse.image.filename}` : null
+    };
+
+    res.status(201).json({ 
+      success: true, 
+      course: responseCourse,
+      message: 'Course created successfully'
     });
 
-    const savedCourse = await newCourse.save();
-    res.status(201).json({ success: true, course: savedCourse });
   } catch (error) {
-    console.error('Error creating course:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ Error creating course:', error);
+    
+    // Mongoose validation error
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error creating course',
+      error: error.message 
+    });
   }
 });
 
-// Update a course
-router.put('/:id', auth, instituteAuth, async (req, res) => {
+// Update a course (WITH FILE UPLOAD)
+router.put('/:id', auth, instituteAuth, upload.single('image'), async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    // Optional: Add a check to ensure the user owns this course
     const institute = await Institute.findOne({ user: req.user._id });
-    if (course.institute.toString() !== institute._id.toString()) {
+    if (!institute || course.institute.toString() !== institute._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to update this course' });
+    }
+
+    // Parse facilities and syllabus
+    let updateData = { ...req.body };
+    
+    if (req.body.facilities) {
+      try {
+        updateData.facilities = JSON.parse(req.body.facilities);
+      } catch (e) {
+        updateData.facilities = [];
+      }
+    }
+    
+    if (req.body.syllabus) {
+      try {
+        updateData.syllabus = JSON.parse(req.body.syllabus);
+      } catch (e) {
+        updateData.syllabus = [];
+      }
+    }
+
+    // Convert fees to number
+    if (req.body.fees) {
+      updateData.fees = Number(req.body.fees);
+    }
+
+    // Update image if new file uploaded
+    if (req.file) {
+      updateData.image = {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        path: req.file.path
+      };
     }
 
     const updatedCourse = await Course.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
 
-    res.json({ success: true, course: updatedCourse });
+    // Add image URL for response
+    const responseCourse = {
+      ...updatedCourse.toObject(),
+      imageUrl: updatedCourse.image ? `${req.protocol}://${req.get('host')}/uploads/${updatedCourse.image.filename}` : null
+    };
+
+    res.json({ 
+      success: true, 
+      course: responseCourse,
+      message: 'Course updated successfully'
+    });
+
   } catch (error) {
     console.error('Error updating course:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors 
+      });
+    }
+    
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -99,7 +247,6 @@ router.delete('/:id', auth, instituteAuth, async (req, res) => {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    // Optional: Add a check to ensure the user owns this course
     const institute = await Institute.findOne({ user: req.user._id });
     if (course.institute.toString() !== institute._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to delete this course' });
@@ -112,6 +259,5 @@ router.delete('/:id', auth, instituteAuth, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
 
 module.exports = router;
