@@ -9,17 +9,16 @@ const router = express.Router();
    🔹 PUBLIC ROUTES
 =========================== */
 
-// ADDED THIS ROUTE: Get all approved institutes for the public page
-// This directly fixes the 500 error for the /public endpoint
+// Get all approved institutes for the public page
 router.get('/public', async (req, res) => {
   try {
-    const institutes = await Institute.find({ status: 'approved' })
-      .populate('user', 'name email');
+    // Use .lean() to make the query faster
+    const institutes = await Institute.find({ status: 'approved' }).lean().exec();
 
     res.json({ success: true, count: institutes.length, institutes });
   } catch (error) {
     console.error('Error fetching public institutes:', error);
-    res.status(500).json({ message: 'Server error while fetching public institutes' });
+    res.status(500).json({ message: 'Server error while fetching public institutes.' });
   }
 });
 
@@ -35,13 +34,12 @@ router.get('/', async (req, res) => {
     if (city) query.city = { $regex: city, $options: 'i' };
     if (facilities) query.facilities = { $in: facilities.split(',') };
 
-    const institutes = await Institute.find(query)
-      .populate('user', 'name email');
+    const institutes = await Institute.find(query).lean().exec();
 
     res.json({ success: true, count: institutes.length, institutes });
   } catch (error) {
     console.error('Error fetching institutes:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
@@ -49,19 +47,17 @@ router.get('/', async (req, res) => {
    🔹 INSTITUTE AUTH ROUTES (Must come before /:id)
 =========================== */
 
-// MOVED THIS ROUTE UP: Get institute profile (logged-in institute)
-// This must come before /:id to avoid being treated as an ID
+// Get institute profile (logged-in institute)
 router.get('/profile', auth, instituteAuth, async (req, res) => {
   try {
-    const institute = await Institute.findOne({ user: req.user._id })
-      .populate('user', 'name email phone');
+    const institute = await Institute.findOne({ user: req.user._id }).populate('user', 'name email phone');
     if (!institute) {
-      return res.status(404).json({ message: 'Institute not found' });
+      return res.status(404).json({ success: false, message: 'Institute profile not found.' });
     }
     res.json({ success: true, institute });
   } catch (error) {
     console.error('Error fetching profile:', error);
-    res.status(500).json({ message: 'Server error while fetching profile' });
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
@@ -70,7 +66,7 @@ router.put('/profile', auth, instituteAuth, async (req, res) => {
   try {
     const institute = await Institute.findOne({ user: req.user._id });
     if (!institute) {
-      return res.status(404).json({ message: 'Institute not found' });
+      return res.status(404).json({ success: false, message: 'Institute profile not found.' });
     }
 
     const updatedInstitute = await Institute.findByIdAndUpdate(
@@ -79,10 +75,10 @@ router.put('/profile', auth, instituteAuth, async (req, res) => {
       { new: true }
     );
 
-    res.json({ success: true, message: 'Profile updated successfully', updatedInstitute });
+    res.json({ success: true, message: 'Profile updated successfully.', updatedInstitute });
   } catch (error) {
     console.error('Error updating institute:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
@@ -90,17 +86,14 @@ router.put('/profile', auth, instituteAuth, async (req, res) => {
    🔹 ADMIN ROUTES (Must come before /:id)
 =========================== */
 
-// MOVED THIS ROUTE UP: Get all pending institutes (admin only)
-// This must come before /:id to avoid being treated as an ID
+// Get all pending institutes (admin only)
 router.get('/admin/pending', auth, adminAuth, async (req, res) => {
   try {
-    const institutes = await Institute.find({ status: 'pending' })
-      .populate('user', 'name email phone createdAt');
-
+    const institutes = await Institute.find({ status: 'pending' }).populate('user', 'name email phone createdAt');
     res.json({ success: true, institutes });
   } catch (error) {
     console.error('Error fetching pending institutes:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
@@ -114,10 +107,10 @@ router.put('/admin/:id/status', auth, adminAuth, async (req, res) => {
       { new: true }
     ).populate('user', 'name email');
 
-    res.json({ success: true, message: 'Status updated', institute });
+    res.json({ success: true, message: 'Status updated.', institute });
   } catch (error) {
     console.error('Error updating institute status:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
@@ -126,18 +119,16 @@ router.put('/admin/:id/status', auth, adminAuth, async (req, res) => {
 =========================== */
 
 // Get single institute by ID (public)
-// This route must be defined after all specific routes like /profile, /admin
 router.get('/:id', async (req, res) => {
   try {
-    const institute = await Institute.findById(req.params.id)
-      .populate('user', 'name email phone');
+    const institute = await Institute.findById(req.params.id).populate('user', 'name email phone');
     if (!institute) {
-      return res.status(404).json({ message: 'Institute not found' });
+      return res.status(404).json({ success: false, message: 'Institute not found.' });
     }
     res.json({ success: true, institute });
   } catch (error) {
     console.error('Error fetching institute by ID:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error.' });
   }
 });
 
