@@ -1,27 +1,57 @@
 // routes/institutes.js
+
 const express = require('express');
 const router = express.Router();
-const inst = require('../controllers/instituteController');
+
+const {
+  getPublicInstitutes,
+  getProfile,
+  updateProfile,
+  getPendingInstitutes,
+  updateInstituteStatus,
+  getFeaturedInstitutes,
+  getInstituteStats,
+  getInstituteById
+} = require('../controllers/instituteController');
+
 const { auth, instituteAuth, adminAuth } = require('../middleware/auth');
 
-// Public endpoints
-router.get('/public', inst.getPublicInstitutes);
-router.get('/', inst.getPublicInstitutes);
 
-// Profile & institute protected
-router.get('/profile', auth, instituteAuth, inst.getProfile);
-router.put('/profile', auth, instituteAuth, inst.updateProfile);
+// ----------------------
+// PUBLIC ROUTES
+// ----------------------
+router.get('/public', getPublicInstitutes);
+router.get('/', getPublicInstitutes);
 
-// Admin
-router.get('/admin/pending', auth, adminAuth, inst.getPending);
-router.put('/admin/:id/status', auth, adminAuth, inst.updateStatus);
-// ⭐ FEATURED INSTITUTES (MISSING ROUTE)
-router.get('/featured', inst.getFeaturedInstitutes);
+// Featured institutes
+router.get('/featured', getFeaturedInstitutes);
 
-// Stats for institute
-router.get('/:id/stats', auth, inst.getStats);
 
-// Single institute (must be after profile)
-router.get('/:id', inst.getById);
+// ----------------------
+// INSTITUTE PROFILE ROUTES
+// ----------------------
+router.get('/profile', auth, instituteAuth, getProfile);
+router.put('/profile', auth, instituteAuth, updateProfile);
+
+
+// ----------------------
+// ADMIN ROUTES
+// ----------------------
+router.get('/admin/pending', auth, adminAuth, getPendingInstitutes);
+router.put('/admin/:id/status', auth, adminAuth, updateInstituteStatus);
+
+
+// ----------------------
+// INSTITUTE STATS
+// ----------------------
+router.get('/:id/stats', auth, getInstituteStats);
+
+
+// ----------------------
+// SINGLE INSTITUTE DETAILS
+// (ALWAYS LAST — dynamic route)
+// ----------------------
+router.get('/:id', getInstituteById);
+
 
 module.exports = router;
