@@ -15,7 +15,8 @@ router.get('/public', async (req, res) => {
   try {
     const { search, category, city, minFees, maxFees, facilities } = req.query;
 
-    let query = { status: 'approved' };
+    // FIX: Use isVerified: true instead of status: 'approved'
+    let query = { isVerified: true };
 
     if (search) query.name = { $regex: search, $options: 'i' };
     if (category) query.category = category;
@@ -39,7 +40,8 @@ router.get('/', async (req, res) => {
   try {
     const { search, category, city, minFees, maxFees, facilities } = req.query;
 
-    let query = { status: 'approved' };
+    // FIX: Use isVerified: true instead of status: 'approved'
+    let query = { isVerified: true };
 
     if (search) query.name = { $regex: search, $options: 'i' };
     if (category) query.category = category;
@@ -128,7 +130,8 @@ router.put('/profile', auth, instituteAuth, async (req, res) => {
 // Get all pending institutes (admin only)
 router.get('/admin/pending', auth, adminAuth, async (req, res) => {
   try {
-    const institutes = await Institute.find({ status: 'pending' })
+    // FIX: Use isVerified: false instead of status: 'pending'
+    const institutes = await Institute.find({ isVerified: false })
       .populate('user', 'name email phone createdAt');
       
     res.json({ success: true, institutes });
@@ -142,9 +145,20 @@ router.get('/admin/pending', auth, adminAuth, async (req, res) => {
 router.put('/admin/:id/status', auth, adminAuth, async (req, res) => {
   try {
     const { status } = req.body;
+    
+    // FIX: Map status to isVerified
+    let updateData = {};
+    if (status === 'approved') {
+      updateData = { isVerified: true };
+    } else if (status === 'rejected') {
+      updateData = { isVerified: false };
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid status. Use "approved" or "rejected".' });
+    }
+
     const institute = await Institute.findByIdAndUpdate(
       req.params.id,
-      { status },
+      updateData,
       { new: true }
     ).populate('user', 'name email');
 

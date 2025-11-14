@@ -77,7 +77,7 @@ exports.verifyInstitute = async (req, res) => {
     if (!institute) return res.status(404).json({ success: false, message: 'Institute not found' });
 
     if (action === 'approve') {
-      institute.isVerified = true;
+      institute.isVerified = true/false;
       institute.adminResponse = {
         status: 'approved',
         reviewedBy: req.user.userId,

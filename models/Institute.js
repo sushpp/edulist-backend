@@ -62,19 +62,17 @@ const instituteSchema = new mongoose.Schema(
         }
       }
     ],
-    status: {
+ status: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending'
     },
-    verified: {
+    // ADD THIS:
+    isVerified: {
       type: Boolean,
       default: false
     }
   },
-  {
-    timestamps: true // adds createdAt and updatedAt automatically
-  }
+  { timestamps: true }
 );
-
 module.exports = mongoose.model('Institute', instituteSchema);
