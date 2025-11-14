@@ -7,56 +7,47 @@ const courseSchema = new mongoose.Schema(
       ref: 'Institute',
       required: true
     },
-
-    // MAIN TITLE FIELD (You selected Option A)
     title: {
       type: String,
       required: true,
       trim: true
     },
-
     description: {
       type: String,
       required: true,
       trim: true
     },
-
     duration: {
       type: String,
       required: true
     },
-
     fees: {
       type: Number,
       required: true,
       min: 0
     },
-
     category: {
       type: String,
       required: true,
       trim: true
     },
-
-    // IMAGE OBJECT (full metadata)
+    // Store uploaded image metadata
     image: {
       filename: { type: String },
       originalName: { type: String },
-      path: { type: String }
+      path: { type: String },
+      url: { type: String }
     },
-
     facilities: [
       {
         type: String,
         trim: true
       }
     ],
-
     eligibility: {
       type: String,
       trim: true
     },
-
     syllabus: [
       {
         type: String,
@@ -64,7 +55,9 @@ const courseSchema = new mongoose.Schema(
       }
     ]
   },
-  { timestamps: true }
+  {
+    timestamps: true // adds createdAt and updatedAt
+  }
 );
 
 module.exports = mongoose.model('Course', courseSchema);
