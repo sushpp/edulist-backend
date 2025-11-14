@@ -15,6 +15,8 @@ router.put('/profile', auth, instituteAuth, inst.updateProfile);
 // Admin
 router.get('/admin/pending', auth, adminAuth, inst.getPending);
 router.put('/admin/:id/status', auth, adminAuth, inst.updateStatus);
+// ⭐ FEATURED INSTITUTES (MISSING ROUTE)
+router.get('/featured', inst.getFeaturedInstitutes);
 
 // Stats for institute
 router.get('/:id/stats', auth, inst.getStats);
