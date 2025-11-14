@@ -1,5 +1,3 @@
-// controllers/instituteController.js
-
 const Institute = require("../models/Institute");
 const User = require("../models/User");
 const Course = require("../models/Course");
