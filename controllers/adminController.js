@@ -1,32 +1,50 @@
-// controllers/adminController.js
 const User = require('../models/User');
 const Institute = require('../models/Institute');
+const Review = require('../models/Review');
+const Enquiry = require('../models/Enquiry');
 
-exports.listUsers = async (req, res) => {
+exports.dashboard = async (req, res) => {
   try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
-    res.json({ success: true, users });
+    const stats = {
+      totalUsers: await User.countDocuments(),
+      totalInstitutes: await Institute.countDocuments(),
+      pendingInstitutes: await Institute.countDocuments({ isVerified: false }),
+      totalReviews: await Review.countDocuments(),
+      totalEnquiries: await Enquiry.countDocuments(),
+    };
+
+    res.json({ success: true, stats });
   } catch (err) {
-    console.error('admin.listUsers error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.getPendingInstitutes = async (req, res) => {
+  try {
+    const pending = await Institute.find({ isVerified: false });
+    res.json({ success: true, institutes: pending });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.verifyInstitute = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { action } = req.body; // 'approve' or 'reject'
-    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ success: false, message: 'Invalid action' });
+    await Institute.findByIdAndUpdate(req.params.id, {
+      isVerified: true
+    });
 
-    const inst = await Institute.findById(id).populate('user', 'email name');
-    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
-
-    inst.isVerified = action === 'approve';
-    await inst.save();
-
-    res.json({ success: true, message: `Institute ${action === 'approve' ? 'approved' : 'rejected'}`, institute: inst });
+    res.json({ success: true, message: 'Institute Verified' });
   } catch (err) {
-    console.error('admin.verifyInstitute error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.listUsers = async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
