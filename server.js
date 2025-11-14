@@ -7,25 +7,69 @@ require('dotenv').config();
 const app = express();
 
 // =======================
-// ✅ Middleware Configuration
+// ✅ ENHANCED CORS Configuration
 // =======================
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    // === FIXED URL ===
-    'https://edulist-frontend-aud9-q1w8pfwzi-sushmitas-projects-64249a1d.vercel.app',
-    // === ROBUST FIX: Allow all subdomains of vercel.app ===
-    // This regex matches any URL that ends with .vercel.app
-    /https:\/\/.*\.vercel\.app$/,
-    // ===================================
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_DEPLOY_URL
-  ].filter(Boolean),
-  credentials: true
-}));
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://edulist-frontend-aud9.vercel.app',
+      // Match all Vercel preview and production URLs
+      /https:\/\/edulist-frontend-aud9-.*\.vercel\.app$/,
+      /https:\/\/edulist-frontend-.*\.vercel\.app$/,
+      // Add your specific Vercel URLs
+      'https://edulist-frontend-aud9-9ugnqsnsi-sushmitas-projects-64249a1d.vercel.app',
+      'https://edulist-frontend-aud9-q1w8pfwzi-sushmitas-projects-64249a1d.vercel.app',
+      process.env.FRONTEND_URL,
+      process.env.FRONTEND_DEPLOY_URL
+    ].filter(Boolean);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+    // Check if the origin is allowed
+    if (allowedOrigins.some(allowedOrigin => {
+      if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return allowedOrigin === origin;
+    })) {
+      callback(null, true);
+    } else {
+      console.log('🔴 CORS Blocked Origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: [
+    'Content-Range',
+    'X-Content-Range'
+  ],
+  maxAge: 86400 // 24 hours
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests globally
+app.options('*', cors(corsOptions));
+
+// =======================
+// ✅ Enhanced Middleware
+// =======================
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =======================
@@ -67,7 +111,7 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/admin', require('./routes/admin'));
 
 // =======================
-// ✅ Health Check Route
+// ✅ Enhanced Health Check Route
 // =======================
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -76,7 +120,23 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    cors: {
+      enabled: true,
+      allowedOrigins: corsOptions.origin.toString()
+    }
+  });
+});
+
+// =======================
+// ✅ CORS Test Endpoint
+// =======================
+app.get('/api/cors-test', (req, res) => {
+  res.json({
+    message: 'CORS is working!',
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString(),
+    corsEnabled: true
   });
 });
 
@@ -88,6 +148,7 @@ app.get('/', (req, res) => {
     message: 'EduList Backend API is running!',
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
+    cors: 'Enabled with dynamic origin checking',
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
@@ -99,7 +160,8 @@ app.get('/', (req, res) => {
       analytics: '/api/analytics',
       upload: '/api/upload',
       admin: '/api/admin',
-      health: '/api/health'
+      health: '/api/health',
+      corsTest: '/api/cors-test'
     }
   });
 });
@@ -116,10 +178,19 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // =======================
-// ✅ Error Handling Middleware
+// ✅ Enhanced Error Handling Middleware
 // =======================
 app.use((err, req, res, next) => {
   console.error('🔴 Error Stack:', err.stack);
+  
+  // Handle CORS errors specifically
+  if (err.message.includes('CORS') || err.message.includes('Not allowed by CORS')) {
+    return res.status(403).json({
+      message: 'CORS Error: Origin not allowed',
+      origin: req.headers.origin,
+      allowedOrigins: 'Vercel domains and localhost'
+    });
+  }
   
   if (err.name === 'ValidationError') {
     const messages = Object.values(err.errors).map(val => val.message);
@@ -158,7 +229,21 @@ app.use('*', (req, res) => {
   res.status(404).json({ 
     message: 'Route not found',
     path: req.originalUrl,
-    method: req.method
+    method: req.method,
+    allowedEndpoints: [
+      '/api/auth',
+      '/api/users', 
+      '/api/institutes',
+      '/api/courses',
+      '/api/reviews',
+      '/api/enquiries',
+      '/api/facilities',
+      '/api/analytics',
+      '/api/upload',
+      '/api/admin',
+      '/api/health',
+      '/api/cors-test'
+    ]
   });
 });
 
@@ -174,6 +259,8 @@ connectDB().then(() => {
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 API URL: http://localhost:${PORT}/api`);
     console.log(`❤️ Health Check: http://localhost:${PORT}/api/health`);
+    console.log(`🔄 CORS Test: http://localhost:${PORT}/api/cors-test`);
+    console.log(`🌐 CORS Enabled: Dynamic origin checking`);
     
     if (process.env.NODE_ENV === 'production') {
       console.log('🏗️ Serving frontend from build directory');
