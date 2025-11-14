@@ -4,12 +4,11 @@ const router = express.Router();
 const inst = require('../controllers/instituteController');
 const { auth, instituteAuth, adminAuth } = require('../middleware/auth');
 
-// Public
+// Public endpoints
 router.get('/public', inst.getPublicInstitutes);
 router.get('/', inst.getPublicInstitutes);
-router.get('/:id', inst.getById);
 
-// Institute (protected) — NOTE: profile routes MUST be before /:id to avoid CastError
+// Profile & institute protected
 router.get('/profile', auth, instituteAuth, inst.getProfile);
 router.put('/profile', auth, instituteAuth, inst.updateProfile);
 
@@ -17,7 +16,10 @@ router.put('/profile', auth, instituteAuth, inst.updateProfile);
 router.get('/admin/pending', auth, adminAuth, inst.getPending);
 router.put('/admin/:id/status', auth, adminAuth, inst.updateStatus);
 
-// Stats
+// Stats for institute
 router.get('/:id/stats', auth, inst.getStats);
+
+// Single institute (must be after profile)
+router.get('/:id', inst.getById);
 
 module.exports = router;

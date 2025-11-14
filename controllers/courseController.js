@@ -7,84 +7,87 @@ exports.createCourse = async (req, res) => {
     const institute = await Institute.findOne({ user: req.user._id });
     if (!institute) return res.status(404).json({ success: false, message: 'Institute not found' });
 
+    // Accept either imageUrl in body or uploaded file handling
     const payload = {
       institute: institute._id,
-      name: req.body.name || req.body.title || 'Untitled',
+      name: req.body.name,
       description: req.body.description || '',
+      category: req.body.category || '',
       duration: req.body.duration || '',
       fees: req.body.fees || 0,
-      mode: req.body.mode || 'offline'
+      imageUrl: req.body.imageUrl || (req.file ? `/uploads/courses/${req.file.filename}` : ''),
+      facilities: req.body.facilities ? JSON.parse(req.body.facilities) : [],
+      syllabus: req.body.syllabus ? JSON.parse(req.body.syllabus) : []
     };
 
     const course = await Course.create(payload);
-    // Optionally push to institute.courses
-    institute.courses = institute.courses || [];
-    institute.courses.push(course._id);
-    await institute.save();
-
     res.status(201).json({ success: true, course });
   } catch (err) {
-    console.error('course.create error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('course.create error', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.getMyCourses = async (req, res) => {
   try {
-    const inst = await Institute.findOne({ user: req.user._id });
-    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
+    const institute = await Institute.findOne({ user: req.user._id });
+    if (!institute) return res.status(404).json({ success: false, message: 'Institute not found' });
 
-    const courses = await Course.find({ institute: inst._id }).sort({ createdAt: -1 });
+    const courses = await Course.find({ institute: institute._id }).sort({ createdAt: -1 });
     res.json({ success: true, courses });
   } catch (err) {
-    console.error('course.getMyCourses error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('course.getMyCourses error', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.getByInstitute = async (req, res) => {
   try {
     const courses = await Course.find({ institute: req.params.instituteId }).sort({ createdAt: -1 });
-    res.json({ success: true, courses });
+    // If none found, return empty array rather than 404 (frontend expects array)
+    res.json({ success: true, courses: Array.isArray(courses) ? courses : [] });
   } catch (err) {
-    console.error('course.getByInstitute error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('course.getByInstitute error', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-exports.getAll = async (req, res) => {
+exports.getAllCourses = async (req, res) => {
   try {
     const courses = await Course.find().populate('institute', 'name').sort({ createdAt: -1 });
     res.json({ success: true, courses });
   } catch (err) {
-    console.error('course.getAll error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('course.getAllCourses error', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-exports.update = async (req, res) => {
+exports.updateCourse = async (req, res) => {
   try {
-    const updated = await Course.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!updated) return res.status(404).json({ success: false, message: 'Course not found' });
+    const payload = {
+      ...req.body,
+      facilities: req.body.facilities ? JSON.parse(req.body.facilities) : undefined,
+      syllabus: req.body.syllabus ? JSON.parse(req.body.syllabus) : undefined,
+      imageUrl: req.body.imageUrl || (req.file ? `/uploads/courses/${req.file.filename}` : undefined)
+    };
+
+    // Remove undefined props so they don't overwrite
+    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+    const updated = await Course.findByIdAndUpdate(req.params.id, payload, { new: true });
     res.json({ success: true, course: updated });
   } catch (err) {
-    console.error('course.update error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('course.updateCourse error', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-exports.remove = async (req, res) => {
+exports.deleteCourse = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id);
-    if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
     await Course.findByIdAndDelete(req.params.id);
-
-    // also remove from institute.courses if present
-    await Institute.updateOne({ _id: course.institute }, { $pull: { courses: course._id } });
-
     res.json({ success: true, message: 'Course deleted' });
   } catch (err) {
-    console.error('course.remove error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('course.deleteCourse error', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };

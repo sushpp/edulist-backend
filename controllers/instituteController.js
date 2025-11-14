@@ -1,19 +1,18 @@
 // controllers/instituteController.js
 const Institute = require('../models/Institute');
-const Review = require('../models/Review');
 const Course = require('../models/Course');
-const User = require('../models/User');
+const Review = require('../models/Review');
 
 exports.createInstitute = async (req, res) => {
   try {
     const existing = await Institute.findOne({ user: req.user._id });
-    if (existing) return res.status(400).json({ success: false, message: 'Institute already exists for this user' });
+    if (existing) return res.status(400).json({ success: false, message: 'Institute already exists' });
 
-    const payload = { ...req.body, user: req.user._id, isVerified: false };
-    const institute = await Institute.create(payload);
-    res.status(201).json({ success: true, institute });
+    const payload = { ...req.body, user: req.user._id, isVerified: false, status: 'pending' };
+    const inst = await Institute.create(payload);
+    res.status(201).json({ success: true, institute: inst });
   } catch (err) {
-    console.error('institute.create error:', err);
+    console.error('institute.create error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -22,9 +21,10 @@ exports.getPublicInstitutes = async (req, res) => {
   try {
     const { page = 1, limit = 12, search = '', category = '', city = '' } = req.query;
     const query = { isVerified: true };
+
     if (search) query.name = { $regex: search, $options: 'i' };
     if (category) query.category = category;
-    if (city) query.city = { $regex: city, $options: 'i' };
+    if (city) query['address.city'] = { $regex: city, $options: 'i' };
 
     const institutes = await Institute.find(query)
       .populate('user', 'name email')
@@ -34,9 +34,11 @@ exports.getPublicInstitutes = async (req, res) => {
       .lean();
 
     const total = await Institute.countDocuments(query);
-    res.json({ success: true, data: { institutes, total, page: Number(page), totalPages: Math.ceil(total / limit) } });
+
+    // Return shape frontend expects: { success: true, institutes: [...] }
+    res.json({ success: true, institutes, total, page: Number(page), totalPages: Math.ceil(total / limit) });
   } catch (err) {
-    console.error('institute.getPublic error:', err);
+    console.error('institute.getPublic error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -47,7 +49,7 @@ exports.getById = async (req, res) => {
     if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
     res.json({ success: true, institute: inst });
   } catch (err) {
-    console.error('institute.getById error:', err);
+    console.error('institute.getById error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -58,7 +60,7 @@ exports.getProfile = async (req, res) => {
     if (!inst) return res.status(404).json({ success: false, message: 'Institute profile not found' });
     res.json({ success: true, institute: inst });
   } catch (err) {
-    console.error('institute.getProfile error:', err);
+    console.error('institute.getProfile error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -67,20 +69,21 @@ exports.updateProfile = async (req, res) => {
   try {
     const inst = await Institute.findOne({ user: req.user._id });
     if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
+
     const updated = await Institute.findByIdAndUpdate(inst._id, req.body, { new: true, runValidators: true });
     res.json({ success: true, institute: updated });
   } catch (err) {
-    console.error('institute.updateProfile error:', err);
+    console.error('institute.updateProfile error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
 exports.getPending = async (req, res) => {
   try {
-    const pending = await Institute.find({ isVerified: false }).populate('user', 'name email').sort({ createdAt: -1 });
+    const pending = await Institute.find({ isVerified: false }).populate('user', 'name email phone').sort({ createdAt: -1 });
     res.json({ success: true, institutes: pending });
   } catch (err) {
-    console.error('institute.getPending error:', err);
+    console.error('institute.getPending error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -88,18 +91,18 @@ exports.getPending = async (req, res) => {
 exports.updateStatus = async (req, res) => {
   try {
     const { status } = req.body; // 'approved' or 'rejected'
-    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
+    if (!['approved','rejected'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
 
     const inst = await Institute.findById(req.params.id).populate('user', 'email name');
     if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
 
     inst.isVerified = status === 'approved';
+    inst.status = status === 'approved' ? 'approved' : 'rejected';
     await inst.save();
 
-    // If approved = true, keep user; if rejected maybe notify / keep or remove depending on your policy
     res.json({ success: true, message: `Institute ${status}`, institute: inst });
   } catch (err) {
-    console.error('institute.updateStatus error:', err);
+    console.error('institute.updateStatus error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -116,7 +119,7 @@ exports.getStats = async (req, res) => {
 
     res.json({ success: true, data: { reviews: reviewsCount, courses: coursesCount } });
   } catch (err) {
-    console.error('institute.getStats error:', err);
+    console.error('institute.getStats error', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

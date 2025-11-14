@@ -1,19 +1,32 @@
 // routes/courses.js
 const express = require('express');
 const router = express.Router();
-const course = require('../controllers/courseController');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const courseCtrl = require('../controllers/courseController');
 const { auth, instituteAuth } = require('../middleware/auth');
 
-// Admin / debug
-router.get('/', course.getAll);
+// Ensure upload folder exists
+const uploadDir = path.join(__dirname, '..', 'uploads', 'courses');
+fs.mkdirSync(uploadDir, { recursive: true });
 
-// Logged-in institute routes
-router.get('/my', auth, instituteAuth, course.getMyCourses);
-router.post('/', auth, instituteAuth, course.createCourse);
-router.put('/:id', auth, instituteAuth, course.update);
-router.delete('/:id', auth, instituteAuth, course.remove);
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage });
+
+// Admin / debug
+router.get('/', courseCtrl.getAllCourses);
+
+// Institute routes
+router.get('/my', auth, instituteAuth, courseCtrl.getMyCourses);
+router.post('/', auth, instituteAuth, upload.single('image'), courseCtrl.createCourse);
+router.put('/:id', auth, instituteAuth, upload.single('image'), courseCtrl.updateCourse);
+router.delete('/:id', auth, instituteAuth, courseCtrl.deleteCourse);
 
 // Public
-router.get('/institute/:instituteId', course.getByInstitute);
+router.get('/institute/:instituteId', courseCtrl.getByInstitute);
 
 module.exports = router;

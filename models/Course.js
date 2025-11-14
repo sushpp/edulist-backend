@@ -1,19 +1,19 @@
-const mongoose = require("mongoose");
+// models/Course.js
+const mongoose = require('mongoose');
 
 const courseSchema = new mongoose.Schema(
   {
-    institute: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Institute",
-      required: true,
-    },
+    institute: { type: mongoose.Schema.Types.ObjectId, ref: 'Institute', required: true },
     name: { type: String, required: true },
-    description: String,
-    duration: String,
-    fees: Number,
-    mode: { type: String, enum: ["online", "offline", "hybrid"], default: "offline" },
+    description: { type: String, default: '' },
+    category: { type: String, default: '' },
+    duration: { type: String, default: '' },
+    fees: { type: Number, default: 0 },
+    imageUrl: { type: String, default: '' },
+    facilities: [{ type: String }],
+    syllabus: [{ type: String }]
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Course", courseSchema);
+module.exports = mongoose.model('Course', courseSchema);
