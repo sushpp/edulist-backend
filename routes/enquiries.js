@@ -1,28 +1,20 @@
+// routes/enquiries.js
 const express = require('express');
-const {
-  createEnquiry,
-  getInstituteEnquiries,
-  getUserEnquiries,
-  updateEnquiryStatus,
-  respondToEnquiry
-} = require('../controllers/enquiryController');
+const router = express.Router();
+const enquiry = require('../controllers/enquiryController');
 const { auth, instituteAuth } = require('../middleware/auth');
 
-const router = express.Router();
+// Create an enquiry (any logged-in user)
+router.post('/', auth, enquiry.create);
 
-// Create enquiry
-router.post('/', auth, createEnquiry);
+// Institute: view enquiries for their institute
+router.get('/institute', auth, instituteAuth, enquiry.getInstituteEnquiries);
 
-// Get enquiries for logged-in institute
-router.get('/institute', auth, instituteAuth, getInstituteEnquiries);
+// User: view own enquiries
+router.get('/user', auth, enquiry.getUserEnquiries);
 
-// Get enquiries for logged-in user
-router.get('/user', auth, getUserEnquiries);
-
-// Update enquiry status (approve/reject/close)
-router.put('/:id/status', auth, instituteAuth, updateEnquiryStatus);
-
-// Respond to an enquiry (message or feedback)
-router.put('/:id/respond', auth, instituteAuth, respondToEnquiry);
+// Institute: update status / respond
+router.put('/:id/status', auth, instituteAuth, enquiry.updateStatus);
+router.put('/:id/respond', auth, instituteAuth, enquiry.respond);
 
 module.exports = router;

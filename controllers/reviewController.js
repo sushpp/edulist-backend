@@ -1,158 +1,98 @@
+// controllers/reviewController.js
 const Review = require('../models/Review');
 const Institute = require('../models/Institute');
-const { updateInstituteRating } = require('../services/reviewService');
 
-// 🟢 Create a new review
-exports.createReview = async (req, res) => {
+exports.create = async (req, res) => {
   try {
-    const { institute, rating, reviewText } = req.body;
+    const { institute: instituteId, rating, reviewText, course } = req.body;
+    if (!instituteId || !rating) return res.status(400).json({ success: false, message: 'institute and rating required' });
 
-    // Check if institute exists
-    const instituteExists = await Institute.findById(institute);
-    if (!instituteExists) {
-      return res.status(404).json({ message: 'Institute not found' });
-    }
+    const inst = await Institute.findById(instituteId);
+    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
 
-    // Check if user already reviewed this institute
-    const existingReview = await Review.findOne({ user: req.user.userId, institute });
-    if (existingReview) {
-      return res.status(400).json({ message: 'You have already reviewed this institute' });
-    }
+    // check if user already reviewed
+    const existing = await Review.findOne({ user: req.user._id, institute: instituteId });
+    if (existing) return res.status(400).json({ success: false, message: 'You have already reviewed this institute' });
 
-    const review = new Review({
-      user: req.user.userId,
-      institute,
+    const review = await Review.create({
+      user: req.user._id,
+      institute: instituteId,
+      course: course || null,
       rating,
       reviewText,
-      isApproved: true, // Auto-approved for now
+      status: 'pending', // moderation workflow
+      isActive: true
     });
 
-    await review.save();
-    await review.populate('user', 'name');
-
-    // Update institute rating
-    await updateInstituteRating(institute);
-
-    res.status(201).json({
-      success: true,
-      message: 'Review submitted successfully',
-      review,
-    });
-  } catch (error) {
-    console.error('Create review error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res.status(201).json({ success: true, review });
+  } catch (err) {
+    console.error('review.create error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// 🟢 Get reviews for a specific institute
-exports.getInstituteReviews = async (req, res) => {
+exports.getByInstitute = async (req, res) => {
   try {
-    const { instituteId } = req.params;
-
-    const reviews = await Review.find({ institute: instituteId, isApproved: true })
-      .populate('user', 'name')
-      .sort({ createdAt: -1 });
-
-    res.json({ success: true, data: reviews });
-  } catch (error) {
-    console.error('Get institute reviews error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    const reviews = await Review.find({ institute: req.params.instituteId, status: 'approved', isActive: true }).populate('user', 'name').sort({ createdAt: -1 });
+    res.json({ success: true, reviews });
+  } catch (err) {
+    console.error('review.getByInstitute error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// 🟢 Get all reviews (Admin only)
-exports.getAllReviews = async (req, res) => {
+exports.getAll = async (req, res) => {
   try {
-    const reviews = await Review.find()
-      .populate('user', 'name')
-      .populate('institute', 'name')
-      .sort({ createdAt: -1 });
-
-    res.json({ success: true, data: reviews });
-  } catch (error) {
-    console.error('Get all reviews error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    const reviews = await Review.find().populate('user', 'name').populate('institute', 'name').sort({ createdAt: -1 });
+    res.json({ success: true, reviews });
+  } catch (err) {
+    console.error('review.getAll error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// 🟢 Moderate (Approve / Reject) a review (Admin only)
-exports.moderateReview = async (req, res) => {
+exports.moderate = async (req, res) => {
   try {
-    const { action } = req.body; // 'approve' or 'reject'
+    const { action } = req.body; // approve or reject
+    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ success: false, message: 'Invalid action' });
 
-    let review;
     if (action === 'approve') {
-      review = await Review.findByIdAndUpdate(
-        req.params.id,
-        { isApproved: true },
-        { new: true }
-      );
-      if (review) await updateInstituteRating(review.institute);
-    } else if (action === 'reject') {
-      review = await Review.findByIdAndDelete(req.params.id);
+      const updated = await Review.findByIdAndUpdate(req.params.id, { status: 'approved', adminApproval: true }, { new: true });
+      return res.json({ success: true, message: 'Review approved', review: updated });
     } else {
-      return res.status(400).json({ success: false, message: 'Invalid action' });
+      await Review.findByIdAndUpdate(req.params.id, { status: 'rejected', adminApproval: false });
+      return res.json({ success: true, message: 'Review rejected' });
     }
-
-    res.json({
-      success: true,
-      message: `Review ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
-    });
-  } catch (error) {
-    console.error('Moderate review error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  } catch (err) {
+    console.error('review.moderate error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// 🟢 Update review (User)
-exports.updateReview = async (req, res) => {
+exports.update = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    if (review.user.toString() !== req.user._id.toString()) return res.status(403).json({ success: false, message: 'Not authorized' });
 
-    if (!review) {
-      return res.status(404).json({ success: false, message: 'Review not found' });
-    }
-
-    if (review.user.toString() !== req.user.userId) {
-      return res.status(403).json({ success: false, message: 'Not authorized' });
-    }
-
-    const updatedReview = await Review.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true }
-    )
-      .populate('user', 'name')
-      .populate('institute', 'name');
-
-    await updateInstituteRating(updatedReview.institute);
-
-    res.json({ success: true, message: 'Review updated successfully', review: updatedReview });
-  } catch (error) {
-    console.error('Update review error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    const updated = await Review.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json({ success: true, review: updated });
+  } catch (err) {
+    console.error('review.update error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// 🟢 Delete review
-exports.deleteReview = async (req, res) => {
+exports.remove = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
-
-    if (!review) {
-      return res.status(404).json({ success: false, message: 'Review not found' });
-    }
-
-    if (review.user.toString() !== req.user.userId && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Not authorized' });
-    }
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    if (review.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'Not authorized' });
 
     await Review.findByIdAndDelete(req.params.id);
-    await updateInstituteRating(review.institute);
-
-    res.json({ success: true, message: 'Review deleted successfully' });
-  } catch (error) {
-    console.error('Delete review error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res.json({ success: true, message: 'Review deleted' });
+  } catch (err) {
+    console.error('review.remove error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

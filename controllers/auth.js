@@ -1,166 +1,80 @@
-const User = require('../models/User');
-const Institute = require('../models/Institute');
+// controllers/authController.js
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const User = require('../models/User');
+const Institute = require('../models/Institute');
 
-const register = async (req, res) => {
+const JWT_SECRET = process.env.JWT_SECRET || 'edulist_secret_key_2025';
+const JWT_EXPIRES = process.env.JWT_EXPIRES || '30d';
+
+const signToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+
+exports.register = async (req, res) => {
   try {
-    const { name, email, password, phone, role, instituteData } = req.body;
+    const { name, email, phone, password, role, instituteData } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ success: false, message: 'name, email and password are required' });
 
-    // Validate required fields
-    if (!name || !email || !password || !phone || !role) {
-      return res.status(400).json({ 
-        message: 'All fields are required: name, email, password, phone, role' 
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) return res.status(400).json({ success: false, message: 'Email already registered' });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await User.create({ name: name.trim(), email: email.toLowerCase().trim(), phone, password: hashed, role: role || 'user' });
+
+    // If registering an institute, create initial institute doc (status pending)
+    if (user.role === 'institute' && instituteData) {
+      await Institute.create({
+        user: user._id,
+        name: instituteData.name || user.name,
+        description: instituteData.description || '',
+        address: instituteData.address || '',
+        city: instituteData.city || '',
+        contactNumber: instituteData.contactNumber || user.phone || '',
+        email: instituteData.email || user.email || '',
+        website: instituteData.website || '',
+        isVerified: false
       });
     }
 
-    // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists with this email' });
-    }
+    const token = signToken(user._id);
+    res.status(201).json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) {
+    console.error('auth.register error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ success: false, message: 'email and password required' });
 
-    // Create user
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword,
-      phone,
-      role
-    });
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+    if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
-    await user.save();
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+    const token = signToken(user._id);
+    res.json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) {
+    console.error('auth.login error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     let institute = null;
-    // If institute registration, create institute profile
-    if (role === 'institute' && instituteData) {
-      // Validate institute data
-      if (!instituteData.name || !instituteData.category || !instituteData.affiliation || 
-          !instituteData.address || !instituteData.city || !instituteData.state || 
-          !instituteData.description) {
-        return res.status(400).json({ 
-          message: 'All institute fields are required: name, category, affiliation, address, city, state, description' 
-        });
-      }
-
-      institute = new Institute({
-        user: user._id,
-        name: instituteData.name,
-        category: instituteData.category,
-        affiliation: instituteData.affiliation,
-        address: instituteData.address,
-        city: instituteData.city,
-        state: instituteData.state,
-        phone: instituteData.phone || phone,
-        email: instituteData.email || email,
-        website: instituteData.website,
-        description: instituteData.description,
-        facilities: instituteData.facilities || [],
-        status: 'pending'
-      });
-      await institute.save();
+    if (user.role === 'institute') {
+      institute = await Institute.findOne({ user: user._id }).lean();
     }
 
-    // Generate token
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
-      institute: institute ? {
-        id: institute._id,
-        name: institute.name,
-        status: institute.status
-      } : null
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    res.json({ success: true, user, institute });
+  } catch (err) {
+    console.error('auth.getMe error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-
-const login = async (req, res) => {
-  try {
-    const { email, password, role } = req.body;
-
-    // Validate required fields
-    if (!email || !password || !role) {
-      return res.status(400).json({ 
-        message: 'Email, password, and role are required' 
-      });
-    }
-
-    // Find user
-    const user = await User.findOne({ email, role });
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid email, password, or role' });
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      return res.status(400).json({ message: 'Account has been deactivated' });
-    }
-
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid email, password, or role' });
-    }
-
-    // For institutes, check if approved
-    if (role === 'institute') {
-      const institute = await Institute.findOne({ user: user._id });
-      if (!institute) {
-        return res.status(400).json({ message: 'Institute profile not found' });
-      }
-      if (institute.status !== 'approved') {
-        return res.status(400).json({ 
-          message: 'Institute registration is pending approval. Please wait for admin approval.' 
-        });
-      }
-    }
-
-    // For admin, check if it's actually an admin
-    if (role === 'admin') {
-      // You might want to add additional admin verification here
-      const isAdmin = email === 'admin@edulist.com'; // Simple check
-      if (!isAdmin) {
-        return res.status(400).json({ message: 'Admin access denied' });
-      }
-    }
-
-    // Generate token
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
-  }
-};
-
-module.exports = { register, login };

@@ -1,146 +1,90 @@
+// controllers/courseController.js
 const Course = require('../models/Course');
 const Institute = require('../models/Institute');
-const path = require('path');
 
-// ✅ Create a new course (with optional image upload)
 exports.createCourse = async (req, res) => {
   try {
-    // Find the institute of the logged-in user
-    const institute = await Institute.findOne({ user: req.user.id });
-    if (!institute) {
-      return res.status(404).json({ message: 'Institute not found' });
-    }
+    const institute = await Institute.findOne({ user: req.user._id });
+    if (!institute) return res.status(404).json({ success: false, message: 'Institute not found' });
 
-    const courseData = {
+    const payload = {
       institute: institute._id,
-      ...req.body
+      name: req.body.name || req.body.title || 'Untitled',
+      description: req.body.description || '',
+      duration: req.body.duration || '',
+      fees: req.body.fees || 0,
+      mode: req.body.mode || 'offline'
     };
 
-    // Add uploaded image if available
-    if (req.file) {
-      courseData.image = {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path
-      };
-    }
+    const course = await Course.create(payload);
+    // Optionally push to institute.courses
+    institute.courses = institute.courses || [];
+    institute.courses.push(course._id);
+    await institute.save();
 
-    const course = new Course(courseData);
-    await course.save();
-
-    res.status(201).json({
-      message: 'Course created successfully',
-      course
-    });
-  } catch (error) {
-    console.error('❌ Create course error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(201).json({ success: true, course });
+  } catch (err) {
+    console.error('course.create error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// ✅ Update a course (with optional image update)
-exports.updateCourse = async (req, res) => {
+exports.getMyCourses = async (req, res) => {
+  try {
+    const inst = await Institute.findOne({ user: req.user._id });
+    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
+
+    const courses = await Course.find({ institute: inst._id }).sort({ createdAt: -1 });
+    res.json({ success: true, courses });
+  } catch (err) {
+    console.error('course.getMyCourses error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.getByInstitute = async (req, res) => {
+  try {
+    const courses = await Course.find({ institute: req.params.instituteId }).sort({ createdAt: -1 });
+    res.json({ success: true, courses });
+  } catch (err) {
+    console.error('course.getByInstitute error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.getAll = async (req, res) => {
+  try {
+    const courses = await Course.find().populate('institute', 'name').sort({ createdAt: -1 });
+    res.json({ success: true, courses });
+  } catch (err) {
+    console.error('course.getAll error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.update = async (req, res) => {
+  try {
+    const updated = await Course.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!updated) return res.status(404).json({ success: false, message: 'Course not found' });
+    res.json({ success: true, course: updated });
+  } catch (err) {
+    console.error('course.update error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.remove = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
-    if (!course) {
-      return res.status(404).json({ message: 'Course not found' });
-    }
-
-    const institute = await Institute.findOne({ user: req.user.id });
-    if (!institute || course.institute.toString() !== institute._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
-    const updateData = { ...req.body };
-
-    // Replace image if uploaded
-    if (req.file) {
-      updateData.image = {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path
-      };
-    }
-
-    const updatedCourse = await Course.findByIdAndUpdate(
-      req.params.id,
-      { $set: updateData },
-      { new: true }
-    );
-
-    res.json({
-      message: 'Course updated successfully',
-      course: updatedCourse
-    });
-  } catch (error) {
-    console.error('❌ Update course error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
-
-// ✅ Get all courses for the logged-in institute
-exports.getCoursesByInstitute = async (req, res) => {
-  try {
-    const institute = await Institute.findOne({ user: req.user.id });
-    if (!institute) {
-      return res.status(404).json({ message: 'Institute not found' });
-    }
-
-    const courses = await Course.find({ institute: institute._id });
-
-    // Add full image URLs for frontend
-    const coursesWithImageUrls = courses.map(course => ({
-      ...course.toObject(),
-      imageUrl: course.image
-        ? `${req.protocol}://${req.get('host')}/uploads/${course.image.filename}`
-        : null
-    }));
-
-    res.json(coursesWithImageUrls);
-  } catch (error) {
-    console.error('❌ Get courses error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
-
-// ✅ Get all courses by a specific institute (public API)
-exports.getInstituteCourses = async (req, res) => {
-  try {
-    const { instituteId } = req.params;
-    const courses = await Course.find({ institute: instituteId });
-
-    const coursesWithImageUrls = courses.map(course => ({
-      ...course.toObject(),
-      imageUrl: course.image
-        ? `${req.protocol}://${req.get('host')}/uploads/${course.image.filename}`
-        : null
-    }));
-
-    res.json(coursesWithImageUrls);
-  } catch (error) {
-    console.error('❌ Get institute courses error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
-
-// ✅ Delete a course
-exports.deleteCourse = async (req, res) => {
-  try {
-    const course = await Course.findById(req.params.id);
-    if (!course) {
-      return res.status(404).json({ message: 'Course not found' });
-    }
-
-    const institute = await Institute.findOne({ user: req.user.id });
-    if (!institute || course.institute.toString() !== institute._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
+    if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
     await Course.findByIdAndDelete(req.params.id);
 
-    res.json({ message: 'Course deleted successfully' });
-  } catch (error) {
-    console.error('❌ Delete course error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    // also remove from institute.courses if present
+    await Institute.updateOne({ _id: course.institute }, { $pull: { courses: course._id } });
+
+    res.json({ success: true, message: 'Course deleted' });
+  } catch (err) {
+    console.error('course.remove error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

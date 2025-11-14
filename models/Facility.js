@@ -1,27 +1,11 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const facilitySchema = new mongoose.Schema({
-  institute: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Institute',
-    required: true
+const facilitySchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    icon: String,
   },
-  name: {
-    type: String,
-    required: true
-  },
-  description: {
-    type: String,
-    required: true
-  },
-  icon: {
-    type: String,
-    default: '🏢'
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Facility', facilitySchema);
+module.exports = mongoose.model("Facility", facilitySchema);

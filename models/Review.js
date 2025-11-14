@@ -1,41 +1,36 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const reviewSchema = new mongoose.Schema(
   {
+    rating: { type: Number, required: true },
+    reviewText: { type: String },
+
+    likes: { type: Number, default: 0 },
+    dislikes: { type: Number, default: 0 },
+
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+
+    isActive: { type: Boolean, default: true },
+    adminApproval: { type: Boolean, default: false },
+
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
+      ref: "User",
+      required: true,
     },
+
     institute: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Institute',
-      required: true
-    },
-    rating: {
-      type: Number,
+      ref: "Institute",
       required: true,
-      min: 1,
-      max: 5
     },
-    reviewText: {
-      type: String,
-      required: true,
-      trim: true
+
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
     },
-    status: {
-      type: String,
-      enum: ['pending', 'approved', 'rejected'],
-      default: 'pending'
-    },
-    isActive: {
-      type: Boolean,
-      default: true
-    }
   },
-  {
-    timestamps: true // automatically adds createdAt and updatedAt
-  }
+  { timestamps: true }
 );
 
-module.exports = mongoose.model('Review', reviewSchema);
+module.exports = mongoose.model("Review", reviewSchema);

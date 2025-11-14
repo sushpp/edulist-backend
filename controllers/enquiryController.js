@@ -1,123 +1,72 @@
+// controllers/enquiryController.js
 const Enquiry = require('../models/Enquiry');
 const Institute = require('../models/Institute');
 
-// ✅ Create enquiry
-exports.createEnquiry = async (req, res) => {
+exports.create = async (req, res) => {
   try {
-    const { institute, name, email, phone, message } = req.body;
+    const { institute: instituteId, name, email, phone, message, course, preferredTiming, notes } = req.body;
+    if (!instituteId || !name || !message) return res.status(400).json({ success: false, message: 'institute, name and message are required' });
 
-    // Check if institute exists and is approved
-    const instituteExists = await Institute.findById(institute);
-    if (!instituteExists || instituteExists.status !== 'approved') {
-      return res.status(400).json({ message: 'Institute not found or not approved' });
-    }
+    const inst = await Institute.findById(instituteId);
+    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
 
-    const enquiry = new Enquiry({
-      user: req.user.id,
-      institute,
-      name,
-      email,
-      phone,
-      message
+    const enquiry = await Enquiry.create({
+      name, email, phone, message, institute: instituteId, course: course || null, preferredTiming, notes
     });
 
-    await enquiry.save();
-    await enquiry.populate('user', 'name email');
-    await enquiry.populate('institute', 'name');
-
-    res.status(201).json({
-      message: 'Enquiry submitted successfully',
-      enquiry
-    });
-  } catch (error) {
-    console.error('Create enquiry error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(201).json({ success: true, enquiry });
+  } catch (err) {
+    console.error('enquiry.create error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// ✅ Get enquiries for a particular institute (for Institute Dashboard)
 exports.getInstituteEnquiries = async (req, res) => {
   try {
-    const institute = await Institute.findOne({ user: req.user.id });
-    if (!institute) {
-      return res.status(404).json({ message: 'Institute not found' });
-    }
+    const inst = await Institute.findOne({ user: req.user._id });
+    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found' });
 
-    const enquiries = await Enquiry.find({ institute: institute._id })
-      .populate('user', 'name email phone')
-      .sort({ createdAt: -1 });
-
-    res.json(enquiries);
-  } catch (error) {
-    console.error('Get institute enquiries error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const enquiries = await Enquiry.find({ institute: inst._id }).sort({ createdAt: -1 });
+    res.json({ success: true, enquiries });
+  } catch (err) {
+    console.error('enquiry.getInstituteEnquiries error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// ✅ Get enquiries made by a specific user (User Dashboard)
 exports.getUserEnquiries = async (req, res) => {
   try {
-    const enquiries = await Enquiry.find({ user: req.user.id })
-      .populate('institute', 'name category')
-      .sort({ createdAt: -1 });
-
-    res.json(enquiries);
-  } catch (error) {
-    console.error('Get user enquiries error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const enquiries = await Enquiry.find({ email: req.user.email }).populate('institute', 'name').sort({ createdAt: -1 });
+    res.json({ success: true, enquiries });
+  } catch (err) {
+    console.error('enquiry.getUserEnquiries error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// ✅ Update enquiry status (e.g., mark as resolved)
-exports.updateEnquiryStatus = async (req, res) => {
+exports.updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    if (!['pending', 'in-progress', 'completed'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
 
-    const enquiry = await Enquiry.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    const updated = await Enquiry.findByIdAndUpdate(req.params.id, { followUpStatus: status }, { new: true });
+    if (!updated) return res.status(404).json({ success: false, message: 'Enquiry not found' });
 
-    if (!enquiry) {
-      return res.status(404).json({ message: 'Enquiry not found' });
-    }
-
-    res.json({
-      message: 'Enquiry status updated successfully',
-      enquiry
-    });
-  } catch (error) {
-    console.error('Update enquiry status error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.json({ success: true, enquiry: updated });
+  } catch (err) {
+    console.error('enquiry.updateStatus error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// ✅ Respond to enquiry (used by Institute)
-exports.respondToEnquiry = async (req, res) => {
+exports.respond = async (req, res) => {
   try {
     const { response } = req.body;
-
-    const enquiry = await Enquiry.findByIdAndUpdate(
-      req.params.id,
-      {
-        response,
-        status: 'responded',
-        respondedAt: new Date()
-      },
-      { new: true }
-    ).populate('user', 'name email');
-
-    if (!enquiry) {
-      return res.status(404).json({ message: 'Enquiry not found' });
-    }
-
-    res.json({
-      message: 'Response sent successfully',
-      enquiry
-    });
-  } catch (error) {
-    console.error('Respond to enquiry error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    const updated = await Enquiry.findByIdAndUpdate(req.params.id, { response, followUpStatus: 'in-progress' }, { new: true });
+    if (!updated) return res.status(404).json({ success: false, message: 'Enquiry not found' });
+    res.json({ success: true, enquiry: updated });
+  } catch (err) {
+    console.error('enquiry.respond error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

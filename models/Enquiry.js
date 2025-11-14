@@ -1,51 +1,32 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const enquirySchema = new mongoose.Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
+    name: { type: String, required: true },
+    email: String,
+    phone: String,
+    message: String,
+
     institute: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Institute',
-      required: true
-    },
-    name: {
-      type: String,
+      ref: "Institute",
       required: true,
-      trim: true
     },
-    email: {
-      type: String,
-      required: true,
-      lowercase: true,
-      trim: true
+
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
     },
-    phone: {
+
+    preferredTiming: String,
+    followUpStatus: {
       type: String,
-      required: true,
-      trim: true
+      enum: ["pending", "in-progress", "completed"],
+      default: "pending",
     },
-    message: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    status: {
-      type: String,
-      enum: ['new', 'contacted', 'resolved'],
-      default: 'new'
-    },
-    response: {
-      type: String,
-      default: ''
-    }
+    notes: String,
   },
-  {
-    timestamps: true // adds createdAt and updatedAt automatically
-  }
+  { timestamps: true }
 );
 
-module.exports = mongoose.model('Enquiry', enquirySchema);
+module.exports = mongoose.model("Enquiry", enquirySchema);
