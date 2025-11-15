@@ -8,17 +8,18 @@ require("dotenv").config();
 const app = express();
 
 /* ---------------------------------------------------------
-   ✅ PRODUCTION-SAFE CORS (Vercel Frontend + Render Backend)
+   CORS Configuration (Dynamic + Static Allowed Origins)
 ------------------------------------------------------------ */
 
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://edulist-frontend-aud9.vercel.app",
-  "https://edulist-frontend-aud9-cecuyfl18-sushmitas-projects-64249a1d.vercel.app",
+  "https://edulist-frontend-aud9-93ba3g6q7-sushmitas-projects-64249a1d.vercel.app", // New Vercel deployment
+  "https://edulist-frontend-aud9-cecuyfl18-sushmitas-projects-64249a1d.vercel.app", // Previous deployment
 ];
 
-// Add dynamic env URLs
+// Allow env-based deploy URLs too
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
 if (process.env.FRONTEND_DEPLOY_URL) allowedOrigins.push(process.env.FRONTEND_DEPLOY_URL);
 
@@ -27,45 +28,39 @@ console.log("Allowed Origins:", allowedOrigins);
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // Allow server-to-server, Postman
-
+      if (!origin) return callback(null, true); // Allow Postman or server-to-server
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-
-      console.log("❌ CORS Blocked:", origin);
+      console.error("❌ CORS Blocked:", origin);
       return callback(new Error("CORS: Origin not allowed"));
     },
     credentials: true,
   })
 );
 
-// Preflight
+// Handle all preflight requests
 app.options("*", cors());
 
 /* ---------------------------------------------------------
-   Middleware
+   Middleware & Static Folder
 ------------------------------------------------------------ */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
-// Static uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ---------------------------------------------------------
-   MongoDB Connect
+   MongoDB Connection
 ------------------------------------------------------------ */
-
 const MONGODB_URI = process.env.MONGODB_URI;
 
 const connectDB = async () => {
+  if (!MONGODB_URI) throw new Error("❌ MONGODB_URI not defined in .env");
   try {
-    if (!MONGODB_URI) throw new Error("MONGODB_URI missing");
-
     const conn = await mongoose.connect(MONGODB_URI);
     console.log("MongoDB Connected:", conn.connection.host);
   } catch (err) {
-    console.error("MongoDB ERROR:", err);
+    console.error("MongoDB Connection Error:", err);
     process.exit(1);
   }
 };
@@ -90,14 +85,14 @@ app.use("/api/admin", require("./routes/admin"));
 app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
-    env: process.env.NODE_ENV || "development",
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-    timestamp: new Date().toISOString(),
+    dbConnection:
+      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    serverTime: new Date().toISOString(),
   });
 });
 
 /* ---------------------------------------------------------
-   404 Handler (MUST be below all route definitions)
+   404 Handler
 ------------------------------------------------------------ */
 app.use((req, res) => {
   res.status(404).json({
@@ -110,24 +105,19 @@ app.use((req, res) => {
    Global Error Handler
 ------------------------------------------------------------ */
 app.use((err, req, res, next) => {
-  console.error("🔥 GLOBAL ERROR:", err);
-
+  console.error("🔥 Global Error:", err.message);
   if (err.message.includes("CORS")) {
     return res.status(403).json({ message: "CORS Error: Origin not allowed" });
   }
-
-  res.status(500).json({ message: err.message || "Server Error" });
+  res.status(500).json({ error: err.message || "Server Error" });
 });
 
 /* ---------------------------------------------------------
    Start Server
 ------------------------------------------------------------ */
 const PORT = process.env.PORT || 5000;
-
 connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 });
 
 module.exports = app;
