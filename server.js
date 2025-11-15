@@ -14,10 +14,11 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://edulist-frontend-aud9.vercel.app", // Main Vercel production URL
+  "https://edulist-frontend-aud9-bqzo09krp-sushmitas-projects-64249a1d.vercel.app" // 🆕 Added Preview URL
 ];
 
 // Dynamic regexp for all Vercel preview deployments
-const vercelPreviewPattern = /^https:\/\/edulist-frontend-aud9-[a-z0-9]+\.vercel\.app$/;
+const vercelPreviewPattern = /^https:\/\/edulist-frontend-aud9-[a-z0-9-]+\.vercel\.app$/;
 
 // Include environment-based URLs
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
@@ -34,7 +35,7 @@ app.use(
         allowedOrigins.includes(origin) ||
         vercelPreviewPattern.test(origin)
       ) {
-        return callback(null, origin); // allow the specific origin
+        return callback(null, true); // allow the specific origin
       }
       console.error("❌ CORS Blocked:", origin);
       return callback(new Error("CORS Error: Origin not allowed"));
@@ -129,7 +130,9 @@ app.use((err, req, res, next) => {
 ------------------------------------------------------------ */
 const PORT = process.env.PORT || 5000;
 connectDB().then(() => {
-  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+  app.listen(PORT, () =>
+    console.log(`🚀 Server running on port ${PORT}`)
+  );
 });
 
 module.exports = app;
