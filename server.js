@@ -8,18 +8,18 @@ require("dotenv").config();
 const app = express();
 
 /* ---------------------------------------------------------
-   CORS Configuration (Dynamic + Static Allowed Origins)
+   CORS Configuration — supports dynamic Vercel subdomains
 ------------------------------------------------------------ */
-
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://edulist-frontend-aud9.vercel.app",
-  "https://edulist-frontend-aud9-93ba3g6q7-sushmitas-projects-64249a1d.vercel.app", // New Vercel deployment
-  "https://edulist-frontend-aud9-cecuyfl18-sushmitas-projects-64249a1d.vercel.app", // Previous deployment
+  "https://edulist-frontend-aud9.vercel.app", // Main Vercel URL
 ];
 
-// Allow env-based deploy URLs too
+// Allow dynamic Vercel preview URLs (eg: *.vercel.app)
+const vercelPreviewPattern = /^https:\/\/edulist-frontend-aud9-[a-z0-9]+\.vercel\.app$/;
+
+// If env URL exists, push too
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
 if (process.env.FRONTEND_DEPLOY_URL) allowedOrigins.push(process.env.FRONTEND_DEPLOY_URL);
 
@@ -29,7 +29,10 @@ app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin) return callback(null, true); // Allow Postman or server-to-server
-      if (allowedOrigins.includes(origin)) {
+      if (
+        allowedOrigins.includes(origin) ||
+        vercelPreviewPattern.test(origin) // Dynamic match for Vercel preview
+      ) {
         return callback(null, true);
       }
       console.error("❌ CORS Blocked:", origin);
@@ -39,7 +42,7 @@ app.use(
   })
 );
 
-// Handle all preflight requests
+// Preflight (OPTIONS) requests
 app.options("*", cors());
 
 /* ---------------------------------------------------------
