@@ -8,7 +8,7 @@ require("dotenv").config();
 const app = express();
 
 /* ---------------------------------------------------------
-   CORS Configuration — supports dynamic Vercel subdomains
+   CORS Configuration — supports dynamic Vercel URLs
 ------------------------------------------------------------ */
 const allowedOrigins = [
   "http://localhost:3000",
@@ -16,37 +16,40 @@ const allowedOrigins = [
   "https://edulist-frontend-aud9.vercel.app", // Main Vercel URL
 ];
 
-// Allow dynamic Vercel preview URLs (eg: *.vercel.app)
+// Dynamic match for Vercel preview deployments
 const vercelPreviewPattern = /^https:\/\/edulist-frontend-aud9-[a-z0-9]+\.vercel\.app$/;
 
-// If env URL exists, push too
+// Add environment-based URLs
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
-if (process.env.FRONTEND_DEPLOY_URL) allowedOrigins.push(process.env.FRONTEND_DEPLOY_URL);
+if (process.env.FRONTEND_DEPLOY_URL)
+  allowedOrigins.push(process.env.FRONTEND_DEPLOY_URL);
 
 console.log("Allowed Origins:", allowedOrigins);
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // Allow Postman or server-to-server
-      if (
-        allowedOrigins.includes(origin) ||
-        vercelPreviewPattern.test(origin) // Dynamic match for Vercel preview
-      ) {
-        return callback(null, true);
-      }
-      console.error("❌ CORS Blocked:", origin);
-      return callback(new Error("CORS: Origin not allowed"));
-    },
-    credentials: true,
-  })
-);
-
-// Preflight (OPTIONS) requests
-app.options("*", cors());
+// CORS Middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (
+    allowedOrigins.includes(origin) ||
+    vercelPreviewPattern.test(origin) ||
+    !origin
+  ) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    );
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204); // No content for preflight
+  }
+  next();
+});
 
 /* ---------------------------------------------------------
-   Middleware & Static Folder
+   Body Parsing & Static Files
 ------------------------------------------------------------ */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
