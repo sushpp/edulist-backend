@@ -44,17 +44,18 @@ exports.getPublicInstitutes = async (req, res) => {
 
 // ======================================================
 // PUBLIC — Get Featured Institutes
+// Add this function if missing
 exports.getFeaturedInstitutes = async (req, res) => {
   try {
-    const featured = await Institute.find({ isVerified: true, isFeatured: true })
-      .populate("user", "name email")
-      .limit(10)
-      .sort({ createdAt: -1 });
+    const institutes = await Institute.find({ isVerified: true, isFeatured: true })
+      .select("name location logo rating description")
+      .sort({ createdAt: -1 })
+      .limit(10);
 
-    res.json({ success: true, institutes: featured });
-  } catch (err) {
-    console.error("❌ getFeaturedInstitutes error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.json(institutes); // ALWAYS ensure an array is returned
+  } catch (error) {
+    console.error("Error fetching featured institutes:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 

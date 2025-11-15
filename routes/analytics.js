@@ -4,17 +4,26 @@ const router = express.Router();
 const User = require("../models/User");
 const Institute = require("../models/Institute");
 const Review = require("../models/Review");
+const { auth, adminAuth } = require("../middleware/auth");
 
-router.get("/admin-stats", async (req, res) => {
+// Admin panel analytics route
+router.get("/admin-stats", auth, adminAuth, async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalInstitutes = await Institute.countDocuments();
-    const approvedInstitutes = await Institute.countDocuments({ isVerified: true });
-    const pendingInstitutes = await Institute.countDocuments({ isVerified: false });
-    const totalReviews = await Review.countDocuments();
+    const [
+      totalUsers,
+      totalInstitutes,
+      approvedInstitutes,
+      pendingInstitutes,
+      totalReviews
+    ] = await Promise.all([
+      User.countDocuments({ role: "user" }) || 0,
+      Institute.countDocuments() || 0,
+      Institute.countDocuments({ isVerified: true }) || 0,
+      Institute.countDocuments({ isVerified: false }) || 0,
+      Review.countDocuments() || 0
+    ]);
 
     return res.json({
-      success: true,
       totalUsers,
       totalInstitutes,
       approvedInstitutes,
@@ -22,10 +31,10 @@ router.get("/admin-stats", async (req, res) => {
       totalReviews
     });
   } catch (err) {
-    console.error("Analytics Error:", err);
+    console.error("⚠️ Analytics Error:", err.message);
     return res.status(500).json({
-      success: false,
-      message: "Server error",
+      message: "Failed to fetch analytics",
+      error: err.message
     });
   }
 });
