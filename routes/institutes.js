@@ -1,49 +1,23 @@
 const express = require('express');
 const router = express.Router();
-
-const {
-  getPublicInstitutes,
-  getProfile,
-  updateProfile,
-  getPendingInstitutes,
-  updateInstituteStatus,
-  getFeaturedInstitutes,
-  getInstituteStats,
-  getInstituteById
-} = require('../controllers/instituteController');
-
+const inst = require('../controllers/instituteController');
 const { auth, instituteAuth, adminAuth } = require('../middleware/auth');
 
-// ----------------------
-// PUBLIC ROUTES
-// ----------------------
-router.get('/public', getPublicInstitutes);
-router.get('/', getPublicInstitutes);
+// Public
+router.get('/', inst.getPublicInstitutes);
+router.get('/public', inst.getPublicInstitutes);
+router.get('/featured', inst.getFeaturedInstitutes);
+router.get('/:id', inst.getInstituteById);
 
-// Featured institutes
-router.get('/featured', getFeaturedInstitutes);
+// Institute
+router.get('/profile', auth, instituteAuth, inst.getProfile);
+router.put('/profile', auth, instituteAuth, inst.updateProfile);
 
-// ----------------------
-// INSTITUTE PROFILE ROUTES
-// ----------------------
-router.get('/profile', auth, instituteAuth, getProfile);
-router.put('/profile', auth, instituteAuth, updateProfile);
+// Admin
+router.get('/admin/pending', auth, adminAuth, inst.getPendingInstitutes);
+router.put('/admin/:id/status', auth, adminAuth, inst.updateInstituteStatus);
 
-// ----------------------
-// ADMIN ROUTES
-// ----------------------
-router.get('/admin/pending', auth, adminAuth, getPendingInstitutes);
-router.put('/admin/:id/status', auth, adminAuth, updateInstituteStatus);
-
-// ----------------------
-// INSTITUTE STATS
-// ----------------------
-router.get('/:id/stats', auth, getInstituteStats);
-
-// ----------------------
-// SINGLE INSTITUTE DETAILS
-// (ALWAYS LAST — dynamic route)
-// ----------------------
-router.get('/:id', getInstituteById);
+// Dashboard
+router.get('/:id/stats', auth, inst.getInstituteStats);
 
 module.exports = router;
