@@ -8,45 +8,51 @@ require("dotenv").config();
 const app = express();
 
 /* ---------------------------------------------------------
-   CORS Configuration — supports dynamic Vercel URLs
+   CORS Configuration — Fix Preflight (OPTIONS) & Vercel URLs
 ------------------------------------------------------------ */
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://edulist-frontend-aud9.vercel.app", // Main Vercel URL
+  "https://edulist-frontend-aud9.vercel.app", // Main Vercel production URL
 ];
 
-// Dynamic match for Vercel preview deployments
+// Dynamic regexp for all Vercel preview deployments
 const vercelPreviewPattern = /^https:\/\/edulist-frontend-aud9-[a-z0-9]+\.vercel\.app$/;
 
-// Add environment-based URLs
+// Include environment-based URLs
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
-if (process.env.FRONTEND_DEPLOY_URL)
-  allowedOrigins.push(process.env.FRONTEND_DEPLOY_URL);
+if (process.env.FRONTEND_DEPLOY_URL) allowedOrigins.push(process.env.FRONTEND_DEPLOY_URL);
 
 console.log("Allowed Origins:", allowedOrigins);
 
-// CORS Middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (
-    allowedOrigins.includes(origin) ||
-    vercelPreviewPattern.test(origin) ||
-    !origin
-  ) {
-    res.setHeader("Access-Control-Allow-Origin", origin || "*");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    );
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204); // No content for preflight
-  }
-  next();
-});
+// Use CORS middleware
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (
+        !origin || // allow server-to-server (e.g. Postman)
+        allowedOrigins.includes(origin) ||
+        vercelPreviewPattern.test(origin)
+      ) {
+        return callback(null, origin); // allow the specific origin
+      }
+      console.error("❌ CORS Blocked:", origin);
+      return callback(new Error("CORS Error: Origin not allowed"));
+    },
+    credentials: true,
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  })
+);
+
+// Handle all preflight OPTIONS requests
+app.options("*", cors());
 
 /* ---------------------------------------------------------
    Body Parsing & Static Files
@@ -86,7 +92,7 @@ app.use("/api/upload", require("./routes/upload"));
 app.use("/api/admin", require("./routes/admin"));
 
 /* ---------------------------------------------------------
-   Health Check
+   Health Check Route
 ------------------------------------------------------------ */
 app.get("/api/health", (req, res) => {
   res.json({
