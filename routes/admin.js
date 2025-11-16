@@ -6,7 +6,10 @@ const Institute = require("../models/Institute");
 const Review = require("../models/Review");
 const Enquiry = require("../models/Enquiry");
 
-router.get("/dashboard", async (req, res) => {
+const { auth, isAdmin } = require("../middleware/auth");
+
+// Admin dashboard analytics route
+router.get("/dashboard", auth, isAdmin, async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const totalInstitutes = await Institute.countDocuments({ isVerified: true });
@@ -14,19 +17,24 @@ router.get("/dashboard", async (req, res) => {
     const totalReviews = await Review.countDocuments();
     const totalEnquiries = await Enquiry.countDocuments();
 
+    // Optional recent activity - populate if needed
+    const newUsers = await User.find().sort({ createdAt: -1 }).limit(5).select("name email");
+    const recentReviews = await Review.find().sort({ createdAt: -1 }).limit(5).populate("user", "name");
+
     return res.json({
       success: true,
-      analytics: {
-        totalUsers,
-        totalInstitutes,
-        pendingInstitutes,
-        totalReviews,
-        totalEnquiries,
-      },
-      recentActivities: {
-        newUsers: [], // optional
-        pendingInstitutes: [], // optional
-        recentReviews: [], // optional
+      data: {
+        analytics: {
+          totalUsers,
+          totalInstitutes,
+          pendingInstitutes,
+          totalReviews,
+          totalEnquiries,
+        },
+        recentActivities: {
+          newUsers,
+          recentReviews,
+        },
       },
     });
   } catch (err) {
