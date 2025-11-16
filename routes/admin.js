@@ -1,23 +1,11 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
+const admin = require('../controllers/adminController');
+const { auth, adminAuth } = require('../middleware/auth');
 
-const {
-  dashboard,
-  getPendingInstitutes,
-  verifyInstitute,
-  listUsers,
-} = require("../controllers/adminController");
-
-const { auth, adminAuth } = require("../middleware/auth");
-
-// Dashboard analytics
-router.get("/dashboard", auth, adminAuth, dashboard);
-
-// Pending Institutes
-router.get("/institutes/pending", auth, adminAuth, getPendingInstitutes);
-router.put("/institutes/verify/:id", auth, adminAuth, verifyInstitute);
-
-// User list
-router.get("/users", auth, adminAuth, listUsers);
+router.get('/dashboard', auth, adminAuth, admin.dashboard);
+router.get('/institutes/pending', auth, adminAuth, admin.getPendingInstitutes);
+router.put('/institutes/:id/verify', auth, adminAuth, admin.verifyInstitute);
+router.get('/users', auth, adminAuth, admin.listUsers);
 
 module.exports = router;
