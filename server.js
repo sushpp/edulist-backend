@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -8,13 +7,13 @@ require("dotenv").config();
 const app = express();
 
 /* ---------------------------------------------------------
-   CORS Configuration — Fix Preflight (OPTIONS) & Vercel URLs
+   CORS Configuration — Fix Preflight & Vercel URLs
 ------------------------------------------------------------ */
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://edulist-frontend-aud9.vercel.app", // Main Vercel production URL
-  "https://edulist-frontend-aud9-bqzo09krp-sushmitas-projects-64249a1d.vercel.app" // 🆕 Added Preview URL
+  "https://edulist-frontend-aud9.vercel.app",
+  "https://edulist-frontend-aud9-bqzo09krp-sushmitas-projects-64249a1d.vercel.app",
 ];
 
 // Dynamic regexp for all Vercel preview deployments
@@ -26,34 +25,22 @@ if (process.env.FRONTEND_DEPLOY_URL) allowedOrigins.push(process.env.FRONTEND_DE
 
 console.log("Allowed Origins:", allowedOrigins);
 
-// Use CORS middleware
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (
-        !origin || // allow server-to-server (e.g. Postman)
-        allowedOrigins.includes(origin) ||
-        vercelPreviewPattern.test(origin)
-      ) {
-        return callback(null, true); // allow the specific origin
+      if (!origin || allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin)) {
+        return callback(null, true);
       }
       console.error("❌ CORS Blocked:", origin);
       return callback(new Error("CORS Error: Origin not allowed"));
     },
     credentials: true,
-    allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "Authorization",
-    ],
+    allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
 
-// Handle all preflight OPTIONS requests
-app.options("*", cors());
+app.options("*", cors()); // Preflight for all routes
 
 /* ---------------------------------------------------------
    Body Parsing & Static Files
@@ -81,6 +68,7 @@ const connectDB = async () => {
 /* ---------------------------------------------------------
    API Routes
 ------------------------------------------------------------ */
+// Always verify the paths & controller exports match your files
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/institutes", require("./routes/institutes"));
@@ -93,13 +81,12 @@ app.use("/api/upload", require("./routes/upload"));
 app.use("/api/admin", require("./routes/admin"));
 
 /* ---------------------------------------------------------
-   Health Check Route
+   Health Check
 ------------------------------------------------------------ */
 app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
-    dbConnection:
-      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    dbConnection: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     serverTime: new Date().toISOString(),
   });
 });
@@ -129,10 +116,9 @@ app.use((err, req, res, next) => {
    Start Server
 ------------------------------------------------------------ */
 const PORT = process.env.PORT || 5000;
+
 connectDB().then(() => {
-  app.listen(PORT, () =>
-    console.log(`🚀 Server running on port ${PORT}`)
-  );
+  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 });
 
 module.exports = app;
