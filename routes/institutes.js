@@ -19,8 +19,6 @@ const { auth, instituteAuth, adminAuth } = require('../middleware/auth');
 // ----------------------
 router.get('/public', getPublicInstitutes);
 router.get('/', getPublicInstitutes);
-
-// Featured institutes
 router.get('/featured', getFeaturedInstitutes);
 
 // ----------------------

@@ -1,10 +1,12 @@
 const Institute = require("../models/Institute");
-const User = require("../models/User");
-const Course = require("../models/Course");
 const Review = require("../models/Review");
+const Course = require("../models/Course");
 
-// ======================================================
-// PUBLIC — Get All Institutes
+// =======================
+// PUBLIC ROUTES
+// =======================
+
+// Get all public institutes (listing / homepage)
 const getPublicInstitutes = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
@@ -21,6 +23,7 @@ const getPublicInstitutes = async (req, res) => {
     if (rating > 0) query.rating = { $gte: rating };
 
     const total = await Institute.countDocuments(query);
+
     const institutes = await Institute.find(query)
       .populate("user", "name email")
       .skip((page - 1) * limit)
@@ -28,21 +31,27 @@ const getPublicInstitutes = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    res.json({ success: true, institutes, total, page, totalPages: Math.ceil(total / limit) });
+    res.json({
+      success: true,
+      institutes,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     console.error("❌ getPublicInstitutes error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// ======================================================
-// PUBLIC — Featured Institutes
+// Get featured institutes
 const getFeaturedInstitutes = async (req, res) => {
   try {
     const featured = await Institute.find({ isVerified: true, isFeatured: true })
       .populate("user", "name email")
       .limit(10)
       .sort({ createdAt: -1 });
+
     res.json({ success: true, institutes: featured });
   } catch (err) {
     console.error("❌ getFeaturedInstitutes error:", err);
@@ -50,8 +59,7 @@ const getFeaturedInstitutes = async (req, res) => {
   }
 };
 
-// ======================================================
-// PUBLIC — Get Institute By ID
+// Get institute by ID
 const getInstituteById = async (req, res) => {
   try {
     const inst = await Institute.findById(req.params.id).populate("user", "name email phone");
@@ -63,8 +71,11 @@ const getInstituteById = async (req, res) => {
   }
 };
 
-// ======================================================
-// INSTITUTE OWNER — Get Profile
+// =======================
+// INSTITUTE OWNER ROUTES
+// =======================
+
+// Get institute profile
 const getProfile = async (req, res) => {
   try {
     const inst = await Institute.findOne({ user: req.user._id }).populate("user", "name email phone");
@@ -76,8 +87,7 @@ const getProfile = async (req, res) => {
   }
 };
 
-// ======================================================
-// INSTITUTE OWNER — Update Profile
+// Update institute profile
 const updateProfile = async (req, res) => {
   try {
     const inst = await Institute.findOne({ user: req.user._id });
@@ -91,8 +101,29 @@ const updateProfile = async (req, res) => {
   }
 };
 
-// ======================================================
-// ADMIN — Get Pending Institutes
+// Get institute dashboard stats
+const getInstituteStats = async (req, res) => {
+  try {
+    const inst = await Institute.findById(req.params.id || req.user._id);
+    if (!inst) return res.status(404).json({ success: false, message: "Institute not found" });
+
+    const [reviewsCount, coursesCount] = await Promise.all([
+      Review.countDocuments({ institute: inst._id }),
+      Course.countDocuments({ institute: inst._id }),
+    ]);
+
+    res.json({ success: true, data: { reviews: reviewsCount, courses: coursesCount } });
+  } catch (err) {
+    console.error("❌ getInstituteStats error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// =======================
+// ADMIN ROUTES
+// =======================
+
+// Get pending institutes
 const getPendingInstitutes = async (req, res) => {
   try {
     const pending = await Institute.find({ isVerified: false })
@@ -105,8 +136,7 @@ const getPendingInstitutes = async (req, res) => {
   }
 };
 
-// ======================================================
-// ADMIN — Approve / Reject Institute
+// Update institute status (approve/reject)
 const updateInstituteStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -126,32 +156,16 @@ const updateInstituteStatus = async (req, res) => {
   }
 };
 
-// ======================================================
-// INSTITUTE OWNER — Stats
-const getInstituteStats = async (req, res) => {
-  try {
-    const inst = await Institute.findById(req.params.id || req.user._id);
-    if (!inst) return res.status(404).json({ success: false, message: "Institute not found" });
-
-    const [reviewsCount, coursesCount] = await Promise.all([
-      Review.countDocuments({ institute: inst._id }),
-      Course.countDocuments({ institute: inst._id }),
-    ]);
-
-    res.json({ success: true, data: { reviews: reviewsCount, courses: coursesCount } });
-  } catch (err) {
-    console.error("❌ getInstituteStats error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
+// =======================
+// EXPORT ALL FUNCTIONS
+// =======================
 module.exports = {
   getPublicInstitutes,
+  getFeaturedInstitutes,
+  getInstituteById,
   getProfile,
   updateProfile,
-  getPendingInstitutes,
-  updateInstituteStatus,
-  getFeaturedInstitutes,
   getInstituteStats,
-  getInstituteById
+  getPendingInstitutes,
+  updateInstituteStatus
 };
