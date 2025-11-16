@@ -5,7 +5,14 @@ const Enquiry = require("../models/Enquiry");
 
 exports.dashboard = async (req, res) => {
   try {
-    const stats = await Promise.all([
+    // 1. Fetch all counts in parallel for efficiency
+    const [
+      totalUsers,
+      totalInstitutes,
+      pendingInstitutesCount,
+      totalReviews,
+      totalEnquiries
+    ] = await Promise.all([
       User.countDocuments(),
       Institute.countDocuments(),
       Institute.countDocuments({ isVerified: false }),
@@ -13,21 +20,58 @@ exports.dashboard = async (req, res) => {
       Enquiry.countDocuments(),
     ]);
 
+    // 2. Fetch data for featured institutes and recent activities
+    const [
+      featured,
+      newestUser,
+      newestPendingInstitute,
+      newestReview
+    ] = await Promise.all([
+      // Fetch a few featured, verified institutes
+      // NOTE: Make sure your Institute model has an `isFeatured: Boolean` field
+      Institute.find({ isFeatured: true, isVerified: true }).limit(5).select('name location photoUrl'),
+      
+      // Fetch the newest user for activity
+      User.findOne().sort({ createdAt: -1 }).select('name createdAt'),
+      
+      // Fetch the newest pending institute for activity
+      Institute.findOne({ isVerified: false }).sort({ createdAt: -1 }).select('name createdAt'),
+      
+      // Fetch the newest review for activity
+      Review.findOne()
+        .sort({ createdAt: -1 })
+        .populate('user', 'name')
+        .populate('institute', 'name')
+        .select('rating createdAt user institute')
+    ]);
+
+    // 3. Structure the response to match what the frontend expects
     res.json({
       success: true,
-      data: {
-        totalUsers: stats[0],
-        totalInstitutes: stats[1],
-        pendingInstitutes: stats[2],
-        totalReviews: stats[3],
-        totalEnquiries: stats[4],
+      // The analytics object is now at the top level
+      analytics: {
+        totalUsers,
+        totalInstitutes,
+        pendingInstitutes: pendingInstitutesCount,
+        totalReviews,
+        totalEnquiries,
+      },
+      // The featured institutes array is now included
+      featuredInstitutes: featured || [],
+      // The recent activities are now structured as arrays
+      recentActivities: {
+        newUsers: newestUser ? [newestUser] : [],
+        pendingInstitutes: newestPendingInstitute ? [newestPendingInstitute] : [],
+        recentReviews: newestReview ? [newestReview] : [],
       },
     });
   } catch (err) {
     console.error("admin.dashboard error", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: "Server Error while fetching dashboard data." });
   }
 };
+
+// --- The other functions look correct and don't need changes ---
 
 exports.getPendingInstitutes = async (req, res) => {
   try {
