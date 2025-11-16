@@ -101,10 +101,32 @@ exports.verifyInstitute = async (req, res) => {
   }
 };
 
+// In your backend controller (e.g., controllers/admin.js)
+
 exports.listUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password").sort({ createdAt: -1 });
-    res.json({ success: true, users });
+    // Example: Get page 1, with 20 users per page
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const skip = (page - 1) * limit;
+
+    const users = await User.find()
+      .select("-password") // Don't fetch passwords
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip);
+
+    const total = await User.countDocuments();
+
+    res.json({ 
+      success: true, 
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalUsers: total,
+      }
+    });
   } catch (err) {
     console.error("admin.listUsers error", err);
     res.status(500).json({ success: false, message: err.message });

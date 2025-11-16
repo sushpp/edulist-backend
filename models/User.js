@@ -16,7 +16,13 @@ const userSchema = new mongoose.Schema(
       url: String
     }
   },
-  { timestamps: true }
+  { 
+    timestamps: true // This automatically adds `createdAt` and `updatedAt` fields
+  }
 );
+
+// FIX: Add an index to the `createdAt` field for fast sorting.
+// This will dramatically speed up queries like `.sort({ createdAt: -1 })`.
+userSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('User', userSchema);
