@@ -7,9 +7,8 @@ const { auth, instituteAuth, adminAuth } = require('../middleware/auth');
 router.get('/', inst.getPublicInstitutes);
 router.get('/public', inst.getPublicInstitutes);
 router.get('/featured', inst.getFeaturedInstitutes);
-router.get('/:id', inst.getInstituteById);
 
-// Institute
+// Make sure this is above any dynamic `/:id` routes
 router.get('/profile', auth, instituteAuth, inst.getProfile);
 router.put('/profile', auth, instituteAuth, inst.updateProfile);
 
@@ -17,7 +16,10 @@ router.put('/profile', auth, instituteAuth, inst.updateProfile);
 router.get('/admin/pending', auth, adminAuth, inst.getPendingInstitutes);
 router.put('/admin/:id/status', auth, adminAuth, inst.updateInstituteStatus);
 
-// Dashboard
+// Dashboard stats (specific route)
 router.get('/:id/stats', auth, inst.getInstituteStats);
+
+// Dynamic route (LAST — to avoid conflicts with other routes)
+router.get('/:id', inst.getInstituteById);
 
 module.exports = router;
