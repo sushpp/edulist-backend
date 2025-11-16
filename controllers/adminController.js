@@ -5,22 +5,39 @@ const Enquiry = require("../models/Enquiry");
 
 exports.dashboard = async (req, res) => {
   try {
-    const stats = await Promise.all([
-      User.countDocuments(),
-      Institute.countDocuments(),
-      Institute.countDocuments({ isVerified: false }),
-      Review.countDocuments(),
-      Enquiry.countDocuments(),
-    ]);
+    const [totalUsers, totalInstitutes, pendingInstitutes, totalReviews, totalEnquiries] =
+      await Promise.all([
+        User.countDocuments(),
+        Institute.countDocuments({ isVerified: true }),
+        Institute.countDocuments({ isVerified: false }),
+        Review.countDocuments(),
+        Enquiry.countDocuments(),
+      ]);
+
+    const newUsers = await User.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("name email");
+
+    const recentReviews = await Review.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("user", "name");
 
     res.json({
       success: true,
       data: {
-        totalUsers: stats[0],
-        totalInstitutes: stats[1],
-        pendingInstitutes: stats[2],
-        totalReviews: stats[3],
-        totalEnquiries: stats[4],
+        analytics: {
+          totalUsers,
+          totalInstitutes,
+          pendingInstitutes,
+          totalReviews,
+          totalEnquiries,
+        },
+        recentActivities: {
+          newUsers,
+          recentReviews,
+        },
       },
     });
   } catch (err) {
