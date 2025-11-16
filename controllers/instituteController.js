@@ -49,7 +49,8 @@ const getFeaturedInstitutes = async (req, res) => {
     const featured = await Institute.find({ isVerified: true, isFeatured: true })
       .populate("user", "name email")
       .limit(10)
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean(); // ensure it's a plain array
 
     res.json({ success: true, institutes: featured });
   } catch (err) {
@@ -135,18 +136,26 @@ const updateInstituteStatus = async (req, res) => {
 };
 
 // ======================================================
-// INSTITUTE — Dashboard Stats
+// INSTITUTE — Dashboard Stats (FIXED)
 const getInstituteStats = async (req, res) => {
   try {
-    const inst = await Institute.findById(req.params.id || req.user._id);
-    if (!inst) return res.status(404).json({ success: false, message: "Institute not found" });
-
-    const [reviewsCount, coursesCount] = await Promise.all([
-      Review.countDocuments({ institute: inst._id }),
-      Course.countDocuments({ institute: inst._id }),
+    // Total counts for dashboard
+    const [totalUsers, totalInstitutes, totalCourses, totalReviews] = await Promise.all([
+      User.countDocuments(),
+      Institute.countDocuments(),
+      Course.countDocuments(),
+      Review.countDocuments(),
     ]);
 
-    res.json({ success: true, data: { reviews: reviewsCount, courses: coursesCount } });
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalInstitutes,
+        totalCourses,
+        totalReviews,
+      },
+    });
   } catch (err) {
     console.error("❌ getInstituteStats error:", err);
     res.status(500).json({ success: false, message: "Server error" });
