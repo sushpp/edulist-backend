@@ -13,7 +13,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://edulist-frontend-aud9.vercel.app",
-  "https://edulist-frontend-aud9-git-main-sushmitas-projects-64249a1d.vercel.app/",
+  "https://edulist-frontend-aud9-6hv748n2q-sushmitas-projects-64249a1d.vercel.app/",
 ];
 
 // Dynamic regexp for all Vercel preview deployments
