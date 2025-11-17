@@ -1,11 +1,23 @@
-// routes/facilities.js
 const express = require('express');
 const router = express.Router();
-const facility = require('../controllers/facilityController');
-const { auth, adminAuth } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
+const {
+  createFacility,
+  getFacilities,
+  updateFacility,
+  deleteFacility,
+} = require('../controllers/facilityController');
 
-router.get('/', facility.list);
-router.post('/', auth, adminAuth, facility.create);
-router.delete('/:id', auth, adminAuth, facility.remove);
+// Create facility
+router.post('/', auth, createFacility);
+
+// Get all facilities for institute
+router.get('/', auth, getFacilities);
+
+// Update facility
+router.put('/:id', auth, updateFacility);
+
+// Delete facility
+router.delete('/:id', auth, deleteFacility);
 
 module.exports = router;

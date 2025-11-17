@@ -1,35 +1,35 @@
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
-    if (!token) return res.status(401).json({ success: false, message: "No token provided" });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "edulist_secret_key_2024");
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) return res.status(401).json({ success: false, message: "User not found" });
-    if (!user.isActive) return res.status(403).json({ success: false, message: "User deactivated" });
-
+    const token = req.header('Authorization').replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ msg: 'No token, authorization denied' });
+    }
+    
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    
+    if (!user) {
+      return res.status(401).json({ msg: 'Token is not valid' });
+    }
+    
     req.user = user;
     next();
   } catch (err) {
-    console.error("Auth error:", err);
-    if (err.name === "TokenExpiredError") return res.status(401).json({ success: false, message: "Token expired" });
-    res.status(401).json({ success: false, message: "Authentication failed" });
+    res.status(401).json({ msg: 'Token is not valid' });
   }
 };
 
-const adminAuth = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
-  if (req.user.role !== "admin") return res.status(403).json({ success: false, message: "Admin only" });
-  next();
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+    next();
+  };
 };
 
-const instituteAuth = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
-  if (req.user.role !== "institute") return res.status(403).json({ success: false, message: "Institute only" });
-  next();
-};
-
-module.exports = { auth, adminAuth, instituteAuth };
+module.exports = { auth, authorize };

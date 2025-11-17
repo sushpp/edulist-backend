@@ -69,16 +69,19 @@ const connectDB = async () => {
    API Routes
 ------------------------------------------------------------ */
 // Always verify the paths & controller exports match your files
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/users", require("./routes/users"));
-app.use("/api/institutes", require("./routes/institutes"));
-app.use("/api/courses", require("./routes/courses"));
-app.use("/api/reviews", require("./routes/reviews"));
-app.use("/api/enquiries", require("./routes/enquiries"));
-app.use("/api/facilities", require("./routes/facilities"));
-app.use("/api/analytics", require("./routes/analytics"));
-app.use("/api/upload", require("./routes/upload"));
-app.use("/api/admin", require("./routes/admin"));
+// ... other middleware
+
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/institutes', require('./routes/institutes'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/admin', require('./routes/admin')); // <-- This line correctly loads the admin routes
+app.use('/api/courses', require('./routes/courses'));
+app.use('/api/facilities', require('./routes/facilities'));
+app.use('/api/reviews', require('./routes/reviews'));
+app.use('/api/enquiries', require('./routes/enquiries'));
+
+// ... rest of the file
 
 /* ---------------------------------------------------------
    Health Check

@@ -1,13 +1,19 @@
-// routes/enquiries.js
 const express = require('express');
 const router = express.Router();
-const enquiry = require('../controllers/enquiryController');
-const { auth, instituteAuth } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
+const {
+  createEnquiry,
+  getEnquiries,
+  updateEnquiryStatus,
+} = require('../controllers/enquiryController');
 
-router.post('/', auth, enquiry.create);
-router.get('/institute', auth, instituteAuth, enquiry.getInstituteEnquiries);
-router.get('/user', auth, enquiry.getUserEnquiries);
-router.put('/:id/status', auth, instituteAuth, enquiry.updateStatus);
-router.put('/:id/respond', auth, instituteAuth, enquiry.respond);
+// Create enquiry
+router.post('/', auth, createEnquiry);
+
+// Get enquiries for institute
+router.get('/', auth, getEnquiries);
+
+// Update enquiry status
+router.put('/:id', auth, updateEnquiryStatus);
 
 module.exports = router;

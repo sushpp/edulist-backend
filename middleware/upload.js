@@ -1,36 +1,36 @@
 const multer = require('multer');
 const path = require('path');
 
-// Configure storage
+// Set storage engine
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: function (req, file, cb) {
     cb(null, 'uploads/');
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  },
+  filename: function (req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  }
 });
 
-// File filter (only allow images)
+// Check file type
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) cb(null, true);
-  else cb(new Error('Only image files are allowed!'), false);
+  // Allowed extensions
+  const filetypes = /jpeg|jpg|png|gif/;
+  // Check extension
+  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+  // Check mime type
+  const mimetype = filetypes.test(file.mimetype);
+
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb('Error: Images Only!');
+  }
 };
 
-// Base upload config
 const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  storage: storage,
+  limits: { fileSize: 1024 * 1024 * 5 }, // 5MB
+  fileFilter: fileFilter
 });
 
-// Export single upload directly
 module.exports = upload;
-
-// Optional: if you want multiple uploads as well
-module.exports.uploadMultiple = upload.fields([
-  { name: 'logo', maxCount: 1 },
-  { name: 'banner', maxCount: 1 },
-  { name: 'gallery', maxCount: 10 }
-]);
