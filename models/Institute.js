@@ -1,3 +1,5 @@
+// models/Institute.js
+
 const mongoose = require('mongoose');
 
 const instituteSchema = new mongoose.Schema({
@@ -42,28 +44,12 @@ const instituteSchema = new mongoose.Schema({
     required: [true, 'Please add a description'],
   },
   facilities: [{
-    type: String,
+    type: mongoose.Schema.ObjectId,
+    ref: 'Facility'
   }],
   courses: [{
-    title: {
-      type: String,
-      required: true,
-    },
-    description: {
-      type: String,
-      required: true,
-    },
-    duration: {
-      type: String,
-      required: true,
-    },
-    fees: {
-      type: Number,
-      required: true,
-    },
-    image: {
-      type: String,
-    },
+    type: mongoose.Schema.ObjectId,
+    ref: 'Course'
   }],
   media: {
     logo: {
@@ -74,9 +60,10 @@ const instituteSchema = new mongoose.Schema({
       type: String,
     }],
   },
-  verified: {
-    type: Boolean,
-    default: false,
+  verifiedStatus: { // I added this field as it was used in your controller
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
   },
   userId: {
     type: mongoose.Schema.ObjectId,
