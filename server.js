@@ -2,6 +2,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
+// IMPORTANT: Added for file upload functionality
+const fileupload = require("express-fileupload"); 
 require("dotenv").config();
 
 const app = express();
@@ -28,7 +30,9 @@ console.log("Allowed Origins:", allowedOrigins);
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin)) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin)) {
         return callback(null, true);
       }
       console.error("❌ CORS Blocked:", origin);
@@ -47,6 +51,13 @@ app.options("*", cors()); // Preflight for all routes
 ------------------------------------------------------------ */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// IMPORTANT: Added file upload middleware here
+// This makes req.files available in your controllers
+app.use(fileupload({
+  createParentPath: true
+}));
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ---------------------------------------------------------
@@ -97,7 +108,7 @@ app.get("/api/health", (req, res) => {
 /* ---------------------------------------------------------
    404 Handler
 ------------------------------------------------------------ */
-app.use((req, res) => {
+app.use((req, res, next) => {
   res.status(404).json({
     message: "Route not found",
     path: req.originalUrl,
@@ -105,13 +116,34 @@ app.use((req, res) => {
 });
 
 /* ---------------------------------------------------------
-   Global Error Handler
+   Global Error Handler (ENHANCED)
 ------------------------------------------------------------ */
 app.use((err, req, res, next) => {
   console.error("🔥 Global Error:", err.message);
+  console.error(err.stack); // Log the full stack trace for debugging
+
+  // Handle specific CORS errors
   if (err.message.includes("CORS")) {
     return res.status(403).json({ message: "CORS Error: Origin not allowed" });
   }
+
+  // Handle Mongoose Validation Errors (e.g., required field missing)
+  if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map(e => e.message);
+    return res.status(400).json({ message: 'Validation Error', errors: errors });
+  }
+
+  // Handle Mongoose CastErrors (e.g., invalid ObjectId format)
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: 'Invalid ID format.' });
+  }
+  
+  // Handle duplicate key errors (e.g., unique email constraint)
+  if (err.code === 11000) {
+    return res.status(409).json({ message: 'Duplicate field value entered.' });
+  }
+
+  // Default to 500 server error for anything else
   res.status(500).json({ error: err.message || "Server Error" });
 });
 
