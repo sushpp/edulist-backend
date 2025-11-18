@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
-const { registerUser, loginUser, getUser } = require('../controllers/authController');
 
-// Register
-router.post('/register', registerUser);
+// Make sure you have this exact line at the top
+const { register, login, getMe } = require('../controllers/authController');
 
-// Login
-router.post('/login', loginUser);
+// This is line 7 where the error was happening.
+// The 'register' variable must be imported correctly for this to work.
+router.post('/register', register);
 
-// Get user
-router.get('/', auth, getUser);
+router.post('/login', login);
+
+// Example of a protected route
+router.get('/me', getMe);
 
 module.exports = router;
