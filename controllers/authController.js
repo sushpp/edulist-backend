@@ -22,33 +22,25 @@ const register = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // 1. Validate request body
     if (!name || !email || !password) {
-      console.log('Validation failed: Missing fields.');
       return res.status(400).json({ message: 'Please provide name, email, and password' });
     }
 
-    // 2. Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
-      console.log('Validation failed: User already exists.');
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
-    // 3. Create user
-    console.log('Attempting to create user...');
     const user = await User.create({
       name,
       email,
       password,
       role: role || 'user',
     });
-    console.log('User created successfully:', user._id);
 
-    // 4. Generate token and send response
     const token = generateToken(user._id, user.role);
-    console.log('Token generated successfully.');
-    
+
+    // --- FIX: Send back token AND user object ---
     // Convert user to a plain object and delete the password field
     const userObject = user.toObject();
     delete userObject.password;
@@ -62,7 +54,6 @@ const register = async (req, res, next) => {
     console.error('--- REGISTRATION ERROR ---');
     console.error('Error Message:', err.message);
     console.error('Error Stack:', err.stack);
-    console.error('-------------------------');
 
     if (err.name === 'ValidationError') {
         const errors = Object.values(err.errors).map(val => val.message);
@@ -104,7 +95,7 @@ const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Generate token and send response
+    // --- FIX: Send back token AND user object ---
     const token = generateToken(user._id, user.role);
     
     // Convert user to a plain object and delete the password field
@@ -122,9 +113,6 @@ const login = async (req, res, next) => {
   }
 };
 
-// @desc    Get current logged-in user
-// @route   GET /api/auth/me
-// @access  Private
 const getMe = async (req, res, next) => {
     try {
         // The protect middleware should have attached the user to req.user
