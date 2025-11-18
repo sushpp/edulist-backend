@@ -1,137 +1,162 @@
-// controllers/authController.js
-
-const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const Institute = require('../models/Institute');
 
-// Generate JWT Token
-const generateToken = (id, role) => {
-  console.log('Generating token for user ID:', id, 'with role:', role);
-  if (!process.env.JWT_SECRET) {
-    console.error('FATAL ERROR: JWT_SECRET is not defined.');
-    throw new Error('JWT_SECRET is not defined in the environment.');
-  }
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '5h',
-  });
-};
-
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
-const register = async (req, res, next) => {
-  console.log('Registration request received with body:', req.body);
+// Register User
+const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, phone } = req.body;
 
-    // 1. Validate request body
-    if (!name || !email || !password) {
-      console.log('Validation failed: Missing fields.');
-      return res.status(400).json({ message: 'Please provide name, email, and password' });
+    // Check if user exists
+    let user = await User.findOne({ email });
+    if (user) {
+      return res.status(400).json({ msg: 'User already exists' });
     }
 
-    // 2. Check if user already exists
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      console.log('Validation failed: User already exists.');
-      return res.status(400).json({ message: 'User with this email already exists' });
-    }
-
-    // 3. Create user
-    console.log('Attempting to create user...');
-    const user = await User.create({
+    // Create new user
+    user = new User({
       name,
       email,
       password,
-      role: role || 'user', // Default to 'user' if no role is provided
+      role,
+      phone,
     });
-    console.log('User created successfully:', user._id);
 
-    // 4. Generate token and send response
-    const token = generateToken(user._id, user.role);
-    console.log('Token generated successfully.');
-    res.status(201).json({
-      success: true,
-      token: token,
-    });
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    // Save user
+    await user.save();
+
+    // If role is institute, create institute profile
+    if (role === 'institute') {
+      const {
+        instituteName,
+        category,
+        affiliation,
+        address,
+        city,
+        state,
+        contactInfo,
+        website,
+        description,
+      } = req.body;
+
+      const institute = new Institute({
+        name: instituteName,
+        category,
+        affiliation,
+        address,
+        city,
+        state,
+        contactInfo,
+        website,
+        description,
+        userId: user._id,
+      });
+
+      await institute.save();
+    }
+
+    // Create JWT
+    const payload = {
+      id: user.id,
+    };
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' },
+      (err, token) => {
+        if (err) throw err;
+        res.json({
+          token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      }
+    );
   } catch (err) {
-    console.error('--- REGISTRATION ERROR ---');
-    console.error('Error Message:', err.message);
-    console.error('Error Stack:', err.stack);
-    console.error('-------------------------');
-
-    // Handle specific Mongoose errors
-    if (err.name === 'ValidationError') {
-        const errors = Object.values(err.errors).map(val => val.message);
-        return res.status(400).json({ message: 'Validation Error', errors });
-    }
-
-    // Handle duplicate key error (e.g., for unique email)
-    if (err.code === 11000) {
-      return res.status(409).json({ message: 'A user with this email already exists.' });
-    }
-    
-    // Handle JWT secret error
-    if (err.message.includes('JWT_SECRET is not defined')) {
-      return res.status(500).json({ message: 'Server configuration error.' });
-    }
-
-    res.status(500).json({ message: 'Server Error during registration' });
+    console.error(err.message);
+    res.status(500).send('Server error');
   }
 };
 
-// @desc    Login a user
-// @route   POST /api/auth/login
-// @access  Public
-const login = async (req, res, next) => {
+// Login User
+const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // 1. Validate request body
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide an email and password' });
-    }
-
-    // 2. Check for user and include password for comparison
-    const user = await User.findOne({ email }).select('+password');
-
+    // Check for user
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(400).json({ msg: 'Invalid credentials' });
     }
 
-    // 3. Check if password matches
-    const isMatch = await user.matchPassword(password);
-
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(400).json({ msg: 'Invalid credentials' });
     }
 
-    // 4. Generate token and send response
-    res.status(200).json({
-      success: true,
-      token: generateToken(user._id, user.role),
-    });
+    // If user is institute, check if institute is approved
+    if (user.role === 'institute') {
+      const institute = await Institute.findOne({ userId: user._id });
+      if (!institute) {
+        return res.status(400).json({ msg: 'Institute profile not found' });
+      }
+      if (institute.verifiedStatus !== 'approved') {
+        return res.status(400).json({ msg: 'Institute not approved yet' });
+      }
+    }
+
+    // Create JWT
+    const payload = {
+      id: user.id,
+    };
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' },
+      (err, token) => {
+        if (err) throw err;
+        res.json({
+          token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      }
+    );
   } catch (err) {
-    console.error('Login Error:', err.message);
-    res.status(500).json({ message: 'Server Error during login' });
+    console.error(err.message);
+    res.status(500).send('Server error');
   }
 };
 
-// @desc    Get current logged in user (for testing)
-// @route   POST /api/auth/me
-// @access  Private
-const getMe = async (req, res, next) => {
-    // req.user is populated by the auth middleware
-    const user = await User.findById(req.user.id);
-
-    res.status(200).json({
-        success: true,
-        data: user
-    });
-}
-
+// Get User
+const getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+};
 
 module.exports = {
-  register,
-  login,
-  getMe
+  registerUser,
+  loginUser,
+  getUser,
 };
