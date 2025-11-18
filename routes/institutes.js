@@ -2,30 +2,26 @@
 
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const { auth } = require('../middleware/auth'); // Make sure you have an auth middleware
 const {
   getInstituteById,
   updateInstitute,
   getInstitutes,
   getInstituteDashboard,
-  // I am adding a createInstitute function here, which you will need.
-  createInstitute,
+  createInstitute, // Import the new function
 } = require('../controllers/instituteController');
 
-// Get all institutes
+// Public routes
 router.get('/', getInstitutes);
-
-// IMPORTANT: Specific routes must come BEFORE the generic /:id route
-// Get institute dashboard
-router.get('/dashboard/me', auth, getInstituteDashboard);
-
-// Get institute by ID
 router.get('/:id', getInstituteById);
 
-// Update institute (using PUT on the root path, which is fine)
-router.put('/', auth, updateInstitute);
+// Protected routes
+router.use(auth); // All routes below this require authentication
 
-// I am adding a route for creating an institute
-router.post('/', auth, createInstitute);
+router.get('/dashboard/me', getInstituteDashboard);
+router.put('/', updateInstitute);
+
+// --- ADD THIS NEW PROTECTED ROUTE ---
+router.post('/', createInstitute);
 
 module.exports = router;
