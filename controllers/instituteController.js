@@ -6,9 +6,98 @@ const Facility = require('../models/Facility');
 const Enquiry = require('../models/Enquiry');
 const Review = require('../models/Review');
 
-// @desc    Get a single institute by ID
-// @route   GET /api/institutes/:id
-// @access  Public
+// @desc    Create a new Institute
+// @route   POST /api/institutes
+// @access  Private
+const createInstitute = async (req, res) => {
+  try {
+    const {
+      name,
+      category,
+      affiliation,
+      address,
+      city,
+      state,
+      contactInfo,
+      website,
+      description,
+    } = req.body;
+
+    // --- VALIDATION ---
+    // Check for all required fields based on the schema
+    if (!name || !category || !address || !city || !state || !description) {
+      return res.status(400).json({ message: 'Please provide all required text fields.' });
+    }
+    if (!contactInfo || !contactInfo.phone || !contactInfo.email) {
+      return res.status(400).json({ message: 'Please provide contact phone and email.' });
+    }
+    if (!req.files || !req.files.logo) {
+      return res.status(400).json({ message: 'Please add a logo.' });
+    }
+    // --- END VALIDATION ---
+
+    // Handle logo upload
+    const logo = req.files.logo;
+    const logoName = `logo_${Date.now()}_${logo.name}`;
+    // Use a promise wrapper for mv to use async/await
+    await new Promise((resolve, reject) => {
+      logo.mv(`./uploads/${logoName}`, (err) => {
+        if (err) reject(err);
+        resolve();
+      });
+    });
+
+    // Handle images upload (optional)
+    let imageNames = [];
+    if (req.files && req.files.images) {
+      const images = req.files.images;
+      const imageArray = Array.isArray(images) ? images : [images];
+      for (const image of imageArray) {
+        const imageName = `image_${Date.now()}_${image.name}`;
+        await new Promise((resolve, reject) => {
+          image.mv(`./uploads/${imageName}`, (err) => {
+            if (err) reject(err);
+            resolve();
+          });
+        });
+        imageNames.push(imageName);
+      }
+    }
+
+    // Create institute object
+    const instituteFields = {
+      name,
+      category,
+      affiliation,
+      address,
+      city,
+      state,
+      contactInfo,
+      website,
+      description,
+      userId: req.user.id, // Assuming auth middleware adds req.user.id
+      media: {
+        logo: logoName,
+        images: imageNames,
+      },
+    };
+
+    const institute = new Institute(instituteFields);
+    await institute.save();
+
+    res.status(201).json(institute);
+  } catch (err) {
+    console.error(err.message);
+    // This is where the validation error would be caught if not handled above
+    if (err.name === 'ValidationError') {
+        const errors = Object.values(err.errors).map(e => e.message);
+        return res.status(400).json({ message: 'Validation Error', errors });
+    }
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+// Get Institute by ID
 const getInstituteById = async (req, res) => {
   try {
     const institute = await Institute.findById(req.params.id)
@@ -23,15 +112,19 @@ const getInstituteById = async (req, res) => {
     res.json(institute);
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server error');
+    res.status(500).json({ message: 'Server Error' });
   }
 };
 
-// @desc    Update an institute
-// @route   PUT /api/institutes
-// @access  Private
+// Update Institute
 const updateInstitute = async (req, res) => {
   try {
+    let institute = await Institute.findOne({ userId: req.user.id });
+
+    if (!institute) {
+      return res.status(404).json({ msg: 'Institute not found' });
+    }
+
     const {
       name,
       category,
@@ -44,7 +137,7 @@ const updateInstitute = async (req, res) => {
       description,
     } = req.body;
 
-    // Build institute object
+    // Build institute object with only the fields that are being updated
     const instituteFields = {};
     if (name) instituteFields.name = name;
     if (category) instituteFields.category = category;
@@ -56,7 +149,7 @@ const updateInstitute = async (req, res) => {
     if (website) instituteFields.website = website;
     if (description) instituteFields.description = description;
 
-    // Handle logo upload
+    // Handle logo upload (if a new one is provided)
     if (req.files && req.files.logo) {
       const logo = req.files.logo;
       const logoName = `logo_${Date.now()}_${logo.name}`;
@@ -66,14 +159,13 @@ const updateInstitute = async (req, res) => {
           resolve();
         });
       });
-      instituteFields['media.logo'] = logoName;
+      instituteFields['media.logo'] = logoName; // Use dot notation for nested object
     }
 
-    // Handle images upload
+    // Handle images upload (if new ones are provided)
     if (req.files && req.files.images) {
       const images = req.files.images;
       const imageNames = [];
-      
       const imageArray = Array.isArray(images) ? images : [images];
       for (const image of imageArray) {
         const imageName = `image_${Date.now()}_${image.name}`;
@@ -88,50 +180,34 @@ const updateInstitute = async (req, res) => {
       instituteFields['media.images'] = imageNames;
     }
 
-    let institute = await Institute.findOne({ userId: req.user.id });
-
-    if (!institute) {
-      return res.status(404).json({ msg: 'Institute not found' });
-    }
-
     institute = await Institute.findOneAndUpdate(
       { userId: req.user.id },
       { $set: instituteFields },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true } // runValidators ensures schema rules are applied on update
     ).populate('facilities').populate('courses');
 
     res.json(institute);
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server error');
+    if (err.name === 'ValidationError') {
+        const errors = Object.values(err.errors).map(e => e.message);
+        return res.status(400).json({ message: 'Validation Error', errors });
+    }
+    res.status(500).json({ message: 'Server Error' });
   }
 };
 
-// @desc    Get all institutes
-// @route   GET /api/institutes
-// @access  Public
+// Get Institutes
 const getInstitutes = async (req, res) => {
   try {
     const { search, city, category, board } = req.query;
     
-    // Build query
-    const query = { verifiedStatus: 'approved' };
+    const query = { verifiedStatus: 'approved' }; // Assuming you have a verifiedStatus field
     
-    if (search) {
-      query.name = { $regex: search, $options: 'i' };
-    }
-    
-    if (city) {
-      query.city = { $regex: city, $options: 'i' };
-    }
-    
-    if (category) {
-      query.category = { $regex: category, $options: 'i' };
-    }
-    
-    if (board) {
-      query.affiliation = { $regex: board, $options: 'i' };
-    }
+    if (search) query.name = { $regex: search, $options: 'i' };
+    if (city) query.city = { $regex: city, $options: 'i' };
+    if (category) query.category = { $regex: category, $options: 'i' };
+    if (board) query.affiliation = { $regex: board, $options: 'i' };
 
     const institutes = await Institute.find(query)
       .populate('facilities')
@@ -140,13 +216,11 @@ const getInstitutes = async (req, res) => {
     res.json(institutes);
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server error');
+    res.status(500).json({ message: 'Server Error' });
   }
 };
 
-// @desc    Get institute dashboard data
-// @route   GET /api/institutes/dashboard/me
-// @access  Private
+// Get Institute Dashboard Data
 const getInstituteDashboard = async (req, res) => {
   try {
     const institute = await Institute.findOne({ userId: req.user.id })
@@ -157,17 +231,14 @@ const getInstituteDashboard = async (req, res) => {
       return res.status(404).json({ msg: 'Institute not found' });
     }
 
-    // Get enquiries
     const enquiries = await Enquiry.find({ instituteId: institute._id })
       .populate('userId', 'name email phone')
       .sort({ date: -1 });
 
-    // Get reviews
     const reviews = await Review.find({ instituteId: institute._id })
       .populate('userId', 'name')
       .sort({ date: -1 });
 
-    // Calculate average rating
     let avgRating = 0;
     if (reviews.length > 0) {
       const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
@@ -184,88 +255,14 @@ const getInstituteDashboard = async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server error');
-  }
-};
-
-// @desc    Create a new institute profile for a logged-in 'institute' user
-// @route   POST /api/institutes
-// @access  Private
-const createInstitute = async (req, res, next) => {
-  try {
-    // The protect middleware should have attached the user to req.user
-    if (!req.user || req.user.role !== 'institute') {
-      return res.status(403).json({ message: 'Only institute users can create an institute profile.' });
-    }
-
-    const {
-      name,
-      category,
-      affiliation,
-      address,
-      city,
-      state,
-      contactInfo,
-      website,
-      description,
-    } = req.body;
-
-    // Basic validation
-    if (!name || !category || !address || !city || !state || !contactInfo || !contactInfo.phone || !contactInfo.email) {
-      return res.status(400).json({ message: 'Please provide all required institute information.' });
-    }
-
-    // Check if an institute profile already exists for this user
-    const existingInstitute = await Institute.findOne({ userId: req.user.id });
-    if (existingInstitute) {
-      return res.status(400).json({ message: 'You have already created an institute profile.' });
-    }
-
-    // Create institute, linking it to the logged-in user's ID
-    const instituteFields = {
-      userId: req.user.id,
-      name,
-      category,
-      affiliation,
-      address,
-      city,
-      state,
-      contactInfo,
-      website,
-      description,
-    };
-
-    // Handle logo upload
-    let logoName;
-    if (req.files && req.files.logo) {
-      const logo = req.files.logo;
-      logoName = `logo_${Date.now()}_${logo.name}`;
-      await new Promise((resolve, reject) => {
-        logo.mv(`./uploads/${logoName}`, (err) => {
-          if (err) reject(err);
-          resolve();
-        });
-      });
-      instituteFields['media.logo'] = logoName;
-    }
-
-    const institute = new Institute(instituteFields);
-    await institute.save();
-
-    res.status(201).json({
-      success: true,
-      data: institute,
-    });
-  } catch (err) {
-    console.error(err.message);
     res.status(500).json({ message: 'Server Error' });
   }
 };
 
 module.exports = {
+  createInstitute, // Export the new function
   getInstituteById,
   updateInstitute,
   getInstitutes,
   getInstituteDashboard,
-  createInstitute, // Add the new function to exports
 };
