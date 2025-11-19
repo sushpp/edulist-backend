@@ -21,20 +21,20 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a password'],
     minlength: 6,
-    select: false,
+    select: false, // Do not return password by default in queries
   },
   role: {
     type: String,
     enum: ['user', 'institute', 'admin'],
     default: 'user',
   },
-  // --- NEW FIELD ---
+  // --- CRITICAL FIELD FOR APPROVAL WORKFLOW ---
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
+    default: 'pending', // New users start as pending
   },
-  // -----------------
+  // ------------------------------------
   createdAt: {
     type: Date,
     default: Date.now,
