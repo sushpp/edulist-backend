@@ -17,9 +17,14 @@ const generateToken = (id, role) => {
 // @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
+// controllers/authController.js
+
 const register = async (req, res, next) => {
+  // This line should already be in your file
   console.log('Registration request received with body:', req.body);
+
   try {
+    // ... rest of the code
     const { name, email, password, role } = req.body;
 
     if (!name || !email || !password) {
@@ -41,7 +46,7 @@ const register = async (req, res, next) => {
     const token = generateToken(user._id, user.role);
 
     // --- FIX: Send back token AND user object ---
-    // Convert user to a plain object and delete the password field
+    // Convert user to a plain object and delete the password field for security
     const userObject = user.toObject();
     delete userObject.password;
 
@@ -98,7 +103,7 @@ const login = async (req, res, next) => {
     // --- FIX: Send back token AND user object ---
     const token = generateToken(user._id, user.role);
     
-    // Convert user to a plain object and delete the password field
+    // Convert user to a plain object and delete the password field for security
     const userObject = user.toObject();
     delete userObject.password;
 
@@ -119,13 +124,10 @@ const getMe = async (req, res, next) => {
         if (!req.user) {
             return res.status(401).json({ message: 'Not authorized' });
         }
-        const user = await User.findById(req.user.id);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
+        // We already have the user from the middleware, no need for another DB call
         res.status(200).json({
             success: true,
-            data: user
+            data: req.user
         });
     } catch (err) {
         console.error('GetMe Error:', err.message);
