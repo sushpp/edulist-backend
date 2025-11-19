@@ -1,5 +1,3 @@
-// routes/admin.js
-
 const express = require('express');
 const router = express.Router();
 const { auth, authorize } = require('../middleware/auth');
@@ -10,29 +8,28 @@ const {
   getAllReviews,
   updateReviewStatus,
   getAllEnquiries,
-  getDashboardAnalytics,
+  getDashboardAnalytics, // This is the function we need
 } = require('../controllers/adminController');
 
-// Apply authentication and authorization to all admin routes
-router.use(auth);
-router.use(authorize('admin'));
+// Get all institutes
+router.get('/institutes', auth, authorize('admin'), getAllInstitutes);
 
-// --- Admin Dashboard and Analytics ---
-router.get('/analytics', getDashboardAnalytics);
+// Update institute status
+router.put('/institutes/:id', auth, authorize('admin'), updateInstituteStatus);
 
-// --- Institute Management ---
-router.get('/institutes', getAllInstitutes);
-// IMPROVEMENT: More explicit route for status updates
-router.put('/institutes/:id/status', updateInstituteStatus);
+// Get all users
+router.get('/users', auth, authorize('admin'), getAllUsers);
 
-// --- User Management ---
-router.get('/users', getAllUsers);
+// Get all reviews
+router.get('/reviews', auth, authorize('admin'), getAllReviews);
 
-// --- Review Management ---
-router.get('/reviews', getAllReviews);
-router.put('/reviews/:id/status', updateReviewStatus);
+// Update review status
+router.put('/reviews/:id', auth, authorize('admin'), updateReviewStatus);
 
-// --- Enquiry Management ---
-router.get('/enquiries', getAllEnquiries);
+// Get all enquiries
+router.get('/enquiries', auth, authorize('admin'), getAllEnquiries);
+
+// Get dashboard analytics
+router.get('/analytics', auth, authorize('admin'), getDashboardAnalytics);
 
 module.exports = router;

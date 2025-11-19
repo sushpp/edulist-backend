@@ -14,13 +14,13 @@ const generateToken = (id, role) => {
   });
 };
 
-// @desc    Register a new user (institute)
+// @desc    Register a new user
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res, next) => {
   console.log('Registration request received with body:', req.body);
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please provide name, email, and password' });
@@ -35,13 +35,20 @@ const register = async (req, res, next) => {
       name,
       email,
       password,
-      role: 'institute',
-      status: 'pending',
+      role: role || 'user',
     });
+
+    const token = generateToken(user._id, user.role);
+
+    // --- FIX: Send back token AND user object ---
+    // Convert user to a plain object and delete the password field
+    const userObject = user.toObject();
+    delete userObject.password;
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Your account is now pending admin approval.'
+      token: token,
+      user: userObject // Send the user object back
     });
   } catch (err) {
     console.error('--- REGISTRATION ERROR ---');
@@ -57,6 +64,10 @@ const register = async (req, res, next) => {
       return res.status(409).json({ message: 'A user with this email already exists.' });
     }
     
+    if (err.message.includes('JWT_SECRET is not defined')) {
+      return res.status(500).json({ message: 'Server configuration error.' });
+    }
+
     res.status(500).json({ message: 'Server Error during registration' });
   }
 };
@@ -84,18 +95,17 @@ const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    if (user.status !== 'approved') {
-      return res.status(403).json({ message: `Your account is ${user.status}. Please contact an admin.` });
-    }
-
+    // --- FIX: Send back token AND user object ---
     const token = generateToken(user._id, user.role);
+    
+    // Convert user to a plain object and delete the password field
     const userObject = user.toObject();
     delete userObject.password;
 
     res.status(200).json({
       success: true,
       token: token,
-      user: userObject
+      user: userObject // Send the user object back
     });
   } catch (err) {
     console.error('Login Error:', err.message);
@@ -103,17 +113,19 @@ const login = async (req, res, next) => {
   }
 };
 
-// @desc    Get current logged in user
-// @route   GET /api/auth/me
-// @access  Private
 const getMe = async (req, res, next) => {
     try {
+        // The protect middleware should have attached the user to req.user
         if (!req.user) {
             return res.status(401).json({ message: 'Not authorized' });
         }
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
         res.status(200).json({
             success: true,
-            data: req.user
+            data: user
         });
     } catch (err) {
         console.error('GetMe Error:', err.message);
@@ -121,16 +133,8 @@ const getMe = async (req, res, next) => {
     }
 };
 
-// @desc    Check if auth service is running
-// @route   GET /api/auth
-// @access  Public
-const getAuthStatus = (req, res) => {
-  res.status(200).json({ message: 'Auth service is running' });
-};
-
 module.exports = {
   register,
   login,
-  getMe,
-  getAuthStatus
+  getMe
 };
