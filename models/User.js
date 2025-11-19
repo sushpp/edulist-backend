@@ -21,13 +21,20 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a password'],
     minlength: 6,
-    select: false, // Do not return password by default in queries
+    select: false,
   },
   role: {
     type: String,
     enum: ['user', 'institute', 'admin'],
     default: 'user',
   },
+  // --- NEW FIELD ---
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+  },
+  // -----------------
   createdAt: {
     type: Date,
     default: Date.now,
@@ -36,7 +43,6 @@ const UserSchema = new mongoose.Schema({
 
 // Encrypt password using bcrypt
 UserSchema.pre('save', async function (next) {
-  // Only run this function if password was actually modified
   if (!this.isModified('password')) {
     return next();
   }

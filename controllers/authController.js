@@ -14,18 +14,13 @@ const generateToken = (id, role) => {
   });
 };
 
-// @desc    Register a new user
+// @desc    Register a new user (institute)
 // @route   POST /api/auth/register
 // @access  Public
-// controllers/authController.js
-
 const register = async (req, res, next) => {
-  // This line should already be in your file
   console.log('Registration request received with body:', req.body);
-
   try {
-    // ... rest of the code
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please provide name, email, and password' });
@@ -40,20 +35,13 @@ const register = async (req, res, next) => {
       name,
       email,
       password,
-      role: role || 'user',
+      role: 'institute',
+      status: 'pending',
     });
-
-    const token = generateToken(user._id, user.role);
-
-    // --- FIX: Send back token AND user object ---
-    // Convert user to a plain object and delete the password field for security
-    const userObject = user.toObject();
-    delete userObject.password;
 
     res.status(201).json({
       success: true,
-      token: token,
-      user: userObject // Send the user object back
+      message: 'Registration successful. Your account is now pending admin approval.'
     });
   } catch (err) {
     console.error('--- REGISTRATION ERROR ---');
@@ -69,10 +57,6 @@ const register = async (req, res, next) => {
       return res.status(409).json({ message: 'A user with this email already exists.' });
     }
     
-    if (err.message.includes('JWT_SECRET is not defined')) {
-      return res.status(500).json({ message: 'Server configuration error.' });
-    }
-
     res.status(500).json({ message: 'Server Error during registration' });
   }
 };
@@ -100,17 +84,18 @@ const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // --- FIX: Send back token AND user object ---
+    if (user.status !== 'approved') {
+      return res.status(403).json({ message: `Your account is ${user.status}. Please contact an admin.` });
+    }
+
     const token = generateToken(user._id, user.role);
-    
-    // Convert user to a plain object and delete the password field for security
     const userObject = user.toObject();
     delete userObject.password;
 
     res.status(200).json({
       success: true,
       token: token,
-      user: userObject // Send the user object back
+      user: userObject
     });
   } catch (err) {
     console.error('Login Error:', err.message);
@@ -118,13 +103,14 @@ const login = async (req, res, next) => {
   }
 };
 
+// @desc    Get current logged in user
+// @route   GET /api/auth/me
+// @access  Private
 const getMe = async (req, res, next) => {
     try {
-        // The protect middleware should have attached the user to req.user
         if (!req.user) {
             return res.status(401).json({ message: 'Not authorized' });
         }
-        // We already have the user from the middleware, no need for another DB call
         res.status(200).json({
             success: true,
             data: req.user
@@ -135,8 +121,16 @@ const getMe = async (req, res, next) => {
     }
 };
 
+// @desc    Check if auth service is running
+// @route   GET /api/auth
+// @access  Public
+const getAuthStatus = (req, res) => {
+  res.status(200).json({ message: 'Auth service is running' });
+};
+
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  getAuthStatus
 };
