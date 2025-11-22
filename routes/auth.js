@@ -1,16 +1,13 @@
+// routes/auth.js
 const express = require('express');
 const router = express.Router();
 
-// Make sure you have this exact line at the top
-const { register, login, getMe } = require('../controllers/authController');
+const { register, login, getMe, getAuthStatus } = require('../controllers/authController');
+const { auth } = require('../middleware/auth'); // middleware that sets req.user
 
-// This is line 7 where the error was happening.
-// The 'register' variable must be imported correctly for this to work.
 router.post('/register', register);
-
 router.post('/login', login);
-
-// Example of a protected route
-router.get('/me', getMe);
+router.get('/me', auth, getMe);
+router.get('/', getAuthStatus);
 
 module.exports = router;
