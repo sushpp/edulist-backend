@@ -4,6 +4,63 @@ const Institute = require('../models/Institute');
 const User = require('../models/User');
 const Review = require('../models/Review');
 const Enquiry = require('../models/Enquiry');
+const mongoose = require('mongoose');
+
+/* ---------------------------------------------------
+    USERS — Approve / Reject User Accounts
+--------------------------------------------------- */
+
+// @desc    Admin updates user status (approved/rejected)
+// @route   PUT /api/admin/users/:id/status
+// @access  Private/Admin
+const updateUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status provided'
+      });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (user.status === status) {
+      return res.status(400).json({
+        success: false,
+        message: `User already ${status}`
+      });
+    }
+
+    user.status = status;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `User has been ${status}.`,
+      data: { userId: id, newStatus: status }
+    });
+
+  } catch (err) {
+    console.error('updateUserStatus Error:', err.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
+  }
+};
+
+/* ---------------------------------------------------
+    INSTITUTES — All, Pending, Approval
+--------------------------------------------------- */
 
 // @desc    Get all institutes for admin view
 // @route   GET /api/admin/institutes
@@ -11,7 +68,7 @@ const Enquiry = require('../models/Enquiry');
 const getAllInstitutes = async (req, res) => {
   try {
     const institutes = await Institute.find()
-      .populate('userId', 'name email phone status') // Populate user info, including status
+      .populate('userId', 'name email phone status')
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -21,102 +78,134 @@ const getAllInstitutes = async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
-// @desc    Get all institutes with 'pending' status for admin approval
+// @desc    Get pending institutes
 // @route   GET /api/admin/pending-institutes
 // @access  Private/Admin
 const getPendingInstitutes = async (req, res) => {
   try {
-    const pendingInstitutes = await Institute.find({ verifiedStatus: 'pending' })
-      .populate('userId', 'name email createdAt status') // Populate user info
+    const pending = await Institute.find({ verifiedStatus: 'pending' })
+      .populate('userId', 'name email createdAt status');
 
     res.status(200).json({
       success: true,
-      count: pendingInstitutes.length,
-      data: pendingInstitutes,
+      count: pending.length,
+      data: pending,
     });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
-// @desc    Approve or Reject an institute (and its user)
-// @route   PUT /api/admin/institutes/:id/approve
+// @desc    Approve or Reject an institute (and associated user)
+// @route   PUT /api/admin/institutes/:id/status
 // @access  Private/Admin
 const updateInstituteStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // Expects { status: 'approved' } or { status: 'rejected' }
+    const { status } = req.body;
 
     if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status provided' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status provided'
+      });
     }
 
     const institute = await Institute.findById(id).populate('userId');
 
     if (!institute) {
-      return res.status(404).json({ success: false, message: 'Institute not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Institute not found'
+      });
     }
 
     if (institute.verifiedStatus !== 'pending') {
-        return res.status(400).json({ success: false, message: `Institute is already ${institute.verifiedStatus}` });
+      return res.status(400).json({
+        success: false,
+        message: `Institute is already ${institute.verifiedStatus}`
+      });
     }
 
-    // --- KEY FIX: Update both Institute and User models atomically ---
-    // Start a Mongoose session for the transaction
+    // Start Transaction
     const session = await Institute.startSession();
     session.startTransaction();
 
     try {
-        // Update institute's status
-        institute.verifiedStatus = status;
-        await institute.save({ session });
+      institute.verifiedStatus = status;
+      await institute.save({ session });
 
-        // Update the associated user's status to match
-        await User.findByIdAndUpdate(
-            institute.userId._id,
-            { status: status }, // User status should match institute status
-            { session }
-        );
+      await User.findByIdAndUpdate(
+        institute.userId._id,
+        { status: status },
+        { session }
+      );
 
-        // Commit the transaction
-        await session.commitTransaction();
-        session.endSession();
+      await session.commitTransaction();
+      session.endSession();
 
-        res.status(200).json({
-            success: true,
-            message: `Institute has been ${status}.`,
-            data: { instituteId: id, newStatus: status }
-        });
+      res.status(200).json({
+        success: true,
+        message: `Institute has been ${status}.`,
+        data: { instituteId: id, newStatus: status }
+      });
 
-    } catch (transactionError) {
-        // If any error occurs, abort the transaction
-        await session.abortTransaction();
-        session.endSession();
-        console.error('Transaction Error:', transactionError);
-        res.status(500).json({ success: false, message: 'Server Error during approval process' });
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error('Transaction Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server Error during approval process'
+      });
     }
 
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
+
+/* ---------------------------------------------------
+    USERS, REVIEWS, ENQUIRIES
+--------------------------------------------------- */
 
 // @desc    Get all regular users
 // @route   GET /api/admin/users
 // @access  Private/Admin
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ role: 'user' }).select('-password').sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: users.length, data: users });
+    const users = await User.find({ role: 'user' })
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
@@ -125,39 +214,54 @@ const getAllUsers = async (req, res) => {
 // @access  Private/Admin
 const getAllReviews = async (req, res) => {
   try {
-    // NOTE: Assumes your Review model has a 'status' field (e.g., 'pending', 'approved')
     const reviews = await Review.find()
       .populate('userId', 'name')
       .populate('instituteId', 'name')
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ success: true, count: reviews.length, data: reviews });
+    res.status(200).json({
+      success: true,
+      count: reviews.length,
+      data: reviews
+    });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
-// @desc    Approve or Reject a review
+// @desc    Approve or reject a review
 // @route   PUT /api/admin/reviews/:id/status
 // @access  Private/Admin
 const updateReviewStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // Expects { status: 'approved' } or { status: 'rejected' }
+    const { status } = req.body;
 
     if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status provided' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status provided'
+      });
     }
 
     const review = await Review.findByIdAndUpdate(
       id,
-      { status: status }, // NOTE: Assumes 'status' field exists in Review model
+      { status },
       { new: true, runValidators: true }
-    ).populate('userId', 'name').populate('instituteId', 'name');
+    )
+      .populate('userId', 'name')
+      .populate('instituteId', 'name');
 
     if (!review) {
-      return res.status(404).json({ success: false, message: 'Review not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
     }
 
     res.status(200).json({
@@ -165,9 +269,13 @@ const updateReviewStatus = async (req, res) => {
       message: `Review has been ${status}.`,
       data: review
     });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
@@ -181,14 +289,22 @@ const getAllEnquiries = async (req, res) => {
       .populate('instituteId', 'name')
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ success: true, count: enquiries.length, data: enquiries });
+    res.status(200).json({
+      success: true,
+      count: enquiries.length,
+      data: enquiries
+    });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
-// @desc    Get dashboard analytics
+// @desc    Admin Dashboard Analytics
 // @route   GET /api/admin/analytics
 // @access  Private/Admin
 const getDashboardAnalytics = async (req, res) => {
@@ -210,8 +326,8 @@ const getDashboardAnalytics = async (req, res) => {
       Institute.countDocuments({ verifiedStatus: 'rejected' }),
       User.countDocuments({ role: 'user' }),
       Review.countDocuments(),
-      Review.countDocuments({ status: 'approved' }), // NOTE: Assumes 'status' field in Review model
-      Review.countDocuments({ status: 'pending' }), // NOTE: Assumes 'status' field in Review model
+      Review.countDocuments({ status: 'approved' }),
+      Review.countDocuments({ status: 'pending' }),
       Enquiry.countDocuments(),
     ]);
 
@@ -237,16 +353,25 @@ const getDashboardAnalytics = async (req, res) => {
         },
       },
     });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({
+      success: false,
+      message: 'Server Error'
+    });
   }
 };
 
+/* ---------------------------------------------------
+    EXPORTS (FINAL)
+--------------------------------------------------- */
+
 module.exports = {
   getAllInstitutes,
-  getPendingInstitutes, // Make sure to export this new function
+  getPendingInstitutes,
   updateInstituteStatus,
+  updateUserStatus,       // <-- NEW
   getAllUsers,
   getAllReviews,
   updateReviewStatus,

@@ -16,6 +16,8 @@ const UserSchema = new mongoose.Schema({
       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
       'Please add a valid email',
     ],
+    lowercase: true,
+    trim: true,
   },
   password: {
     type: String,
@@ -28,13 +30,12 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'institute', 'admin'],
     default: 'user',
   },
-  // --- CRITICAL FIELD FOR APPROVAL WORKFLOW ---
+  // status controls approval workflow: pending | approved | rejected
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending', // New users start as pending
   },
-  // ------------------------------------
   createdAt: {
     type: Date,
     default: Date.now,

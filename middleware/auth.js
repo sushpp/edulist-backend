@@ -1,35 +1,29 @@
+// middleware/auth.js
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization').replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ msg: 'No token, authorization denied' });
-    }
-    
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ message: 'No token, authorization denied' });
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id);
-    
-    if (!user) {
-      return res.status(401).json({ msg: 'Token is not valid' });
-    }
-    
+    if (!user) return res.status(401).json({ message: 'Token is not valid' });
+
     req.user = user;
     next();
   } catch (err) {
-    res.status(401).json({ msg: 'Token is not valid' });
+    res.status(401).json({ message: 'Token is not valid' });
   }
 };
 
-const authorize = (...roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ msg: 'Access denied' });
-    }
-    next();
-  };
+const authorize = (...roles) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  next();
 };
 
 module.exports = { auth, authorize };

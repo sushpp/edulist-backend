@@ -14,7 +14,7 @@ const generateToken = (id, role) => {
   });
 };
 
-// @desc    Register a new user (user or institute)
+// @desc    Register a new user (user or institute). Only admins are auto-approved.
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res, next) => {
@@ -25,42 +25,41 @@ const register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide name, email, and password' });
     }
 
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: email.toLowerCase().trim() });
     if (userExists) {
       return res.status(400).json({ success: false, message: 'User with this email already exists' });
     }
 
-    // Determine status based on role:
-    // - 'institute' => 'pending' (admin must approve)
-    // - other roles (user/admin) => 'approved'
-    const status = (role === 'institute') ? 'pending' : 'approved';
+    // Option B: All non-admin accounts must be approved by admin
+    const status = (role === 'admin') ? 'approved' : 'pending';
 
     const user = await User.create({
       name,
-      email,
+      email: email.toLowerCase().trim(),
       password,
       role,
       status,
     });
 
-    // If user is an institute -> return success message only (no token).
-    if (role === 'institute') {
+    // If admin created via API, return token so admin can login immediately.
+    if (role === 'admin') {
+      const token = generateToken(user._id, user.role);
+      const userObj = user.toObject();
+      delete userObj.password;
       return res.status(201).json({
         success: true,
-        message: 'Registration successful. Your institute account is pending admin approval.'
+        token,
+        user: userObj
       });
     }
 
-    // If regular user/admin -> auto-approve and return token + user
-    const token = generateToken(user._id, user.role);
-    const userObj = user.toObject();
-    delete userObj.password;
-
+    // For all non-admins, do NOT return token. They must wait for admin approval.
     return res.status(201).json({
       success: true,
-      token,
-      user: userObj
+      pending: true,
+      message: 'Registration successful. Your account is pending admin approval.'
     });
+
   } catch (err) {
     console.error('--- REGISTRATION ERROR ---');
     console.error('Error Message:', err.message);
@@ -90,7 +89,7 @@ const login = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide an email and password' });
     }
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -102,9 +101,9 @@ const login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Only allow login if user is approved
-    if (user.status !== 'approved') {
-      // 403 Forbidden (user exists but not allowed to login yet)
+    // Option B: Allow admins to login regardless of status.
+    // All other roles must have status === 'approved'
+    if (user.role !== 'admin' && user.status !== 'approved') {
       return res.status(403).json({ success: false, message: `Your account is ${user.status}. Please contact an admin.` });
     }
 
@@ -112,11 +111,12 @@ const login = async (req, res, next) => {
     const userObject = user.toObject();
     delete userObject.password;
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       token,
       user: userObject
     });
+
   } catch (err) {
     console.error('Login Error:', err.message);
     res.status(500).json({ success: false, message: 'Server Error during login' });
